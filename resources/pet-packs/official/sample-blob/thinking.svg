@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140" width="140" height="140" role="img" aria-label="软软团 thinking">
+  <ellipse cx="70" cy="118" rx="34" ry="8" fill="#000000" opacity="0.06"/>
+  <path d="M28 92 C28 56 46 38 70 38 C94 38 112 56 112 92 C112 108 104 118 96 113 C91 122 79 122 74 115 C72 118 68 118 66 115 C61 122 49 122 44 113 C36 118 28 108 28 92 Z"
+        fill="#7AA7FF" stroke="#5E8BE6" stroke-width="3" stroke-linejoin="round"/>
+  <ellipse cx="54" cy="60" rx="12" ry="7" fill="#A6C4FF" opacity="0.7" transform="rotate(-18 54 60)"/>
+  <circle cx="56" cy="86" r="5" fill="#26324D"/>
+  <circle cx="84" cy="86" r="5" fill="#26324D"/>
+  <circle cx="57.6" cy="83.6" r="1.7" fill="#FFFFFF"/>
+  <circle cx="85.6" cy="83.6" r="1.7" fill="#FFFFFF"/>
+  <path d="M65 99 h10" stroke="#26324D" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+  <ellipse cx="44" cy="96" rx="6.5" ry="4" fill="#FFB3C1" opacity="0.7"/>
+  <ellipse cx="96" cy="96" rx="6.5" ry="4" fill="#FFB3C1" opacity="0.7"/>
+  <g fill="#5E8BE6" opacity="0.85">
+    <circle cx="99" cy="48" r="2.2"/>
+    <circle cx="107" cy="45" r="2.2"/>
+    <circle cx="115" cy="42" r="2.2"/>
+  </g>
+</svg>

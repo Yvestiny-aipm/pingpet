@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>桌宠 · 帮你盯着 Codex / Claude Code</title>
+<style>
+  /* ============ 设计令牌 ============ */
+  :root {
+    color-scheme: light dark;
+
+    --paper: #fbfaf6;
+    --panel: #ffffff;
+    --nav:   #f2f0e9;
+    --line:  #e7e3d8;
+    --ink:   #2a2925;
+    --ink-2: #6f6c62;
+    --ink-3: #a29e93;
+
+    --sky:   #3d8bff;
+    --mint:  #17c3a2;
+    --coral: #ff5d5d;
+    --lemon: #ffca28;
+
+    --shadow:      3px 3px 0 var(--ink);
+    --shadow-sm:   2px 2px 0 var(--ink);
+    --shadow-lg:   5px 5px 0 var(--ink);
+
+    --mono: ui-monospace, "SF Mono", "Menlo", "DejaVu Sans Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+
+    --maxw: 1080px;
+    --radius: 12px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #1b1a17;
+      --panel: #23211d;
+      --nav:   #201e1a;
+      --line:  #3a372f;
+      --ink:   #f4f1e8;
+      --ink-2: #b3afa2;
+      --ink-3: #7c7869;
+      --shadow:    3px 3px 0 #000;
+      --shadow-sm: 2px 2px 0 #000;
+      --shadow-lg: 5px 5px 0 #000;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #1b1a17; --panel: #23211d; --nav: #201e1a; --line: #3a372f;
+    --ink: #f4f1e8; --ink-2: #b3afa2; --ink-3: #7c7869;
+    --shadow: 3px 3px 0 #000; --shadow-sm: 2px 2px 0 #000; --shadow-lg: 5px 5px 0 #000;
+  }
+  :root[data-theme="light"] {
+    --paper: #fbfaf6; --panel: #ffffff; --nav: #f2f0e9; --line: #e7e3d8;
+    --ink: #2a2925; --ink-2: #6f6c62; --ink-3: #a29e93;
+    --shadow: 3px 3px 0 var(--ink); --shadow-sm: 2px 2px 0 var(--ink); --shadow-lg: 5px 5px 0 var(--ink);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+  a { color: var(--sky); text-underline-offset: 3px; }
+
+  /* 像素方块品牌标 */
+  .logo-mark {
+    width: 16px; height: 16px; flex: none; border-radius: 0;
+    background:
+      linear-gradient(135deg, var(--lemon) 0 50%, transparent 50%),
+      linear-gradient(-45deg, var(--coral) 0 50%, var(--sky) 50%);
+    box-shadow: 1.5px 1.5px 0 var(--ink);
+    image-rendering: pixelated;
+  }
+
+  /* ============ 顶栏 ============ */
+  header.nav {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--paper) 86%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 2px solid var(--line);
+  }
+  .nav-inner {
+    display: flex; align-items: center; gap: 14px;
+    height: 60px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-weight: 700; font-size: 15px;
+    letter-spacing: -0.02em; color: var(--ink); text-decoration: none;
+  }
+  .nav-links { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .nav-links a {
+    font-size: 13.5px; color: var(--ink-2); text-decoration: none;
+    padding: 7px 11px; border-radius: 8px;
+  }
+  .nav-links a:hover { background: rgba(128,128,128,0.1); color: var(--ink); }
+  .theme-btn {
+    font-family: var(--mono); font-size: 12px;
+    border: 2px solid var(--line); background: var(--panel); color: var(--ink);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  .theme-btn:hover { border-color: var(--ink); }
+
+  /* 像素实心按钮 */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--sans); font-size: 14px; font-weight: 700;
+    padding: 11px 18px; border: 2px solid var(--ink); border-radius: 9px;
+    background: var(--sky); color: #fff; cursor: pointer; text-decoration: none;
+    box-shadow: var(--shadow);
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  .btn:hover { transform: translate(-1px,-1px); box-shadow: var(--shadow-lg); }
+  .btn:active { transform: translate(1px,1px); box-shadow: var(--shadow-sm); }
+  .btn.ghost { background: var(--panel); color: var(--ink); }
+  .btn.small { font-size: 13px; padding: 8px 14px; box-shadow: var(--shadow-sm); }
+
+  /* ============ Hero ============ */
+  .hero { padding: 64px 0 40px; }
+  .hero-grid {
+    display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 44px; align-items: center;
+  }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    letter-spacing: 0.04em; color: var(--ink-2);
+    border: 1.5px solid var(--line); border-radius: 999px;
+    padding: 5px 12px; margin-bottom: 20px; background: var(--panel);
+  }
+  .dot-live { width: 8px; height: 8px; border-radius: 50%; background: var(--mint);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mint) 30%, transparent); }
+  h1.hero-title {
+    font-family: var(--mono); font-weight: 700;
+    font-size: clamp(34px, 5vw, 52px); line-height: 1.08;
+    letter-spacing: -0.03em; margin: 0 0 18px; text-wrap: balance;
+  }
+  h1 .hl { position: relative; white-space: nowrap; }
+  h1 .hl::after {
+    content: ''; position: absolute; left: -2px; right: -2px; bottom: 4px; height: 10px;
+    background: var(--lemon); z-index: -1; opacity: 0.85;
+  }
+  .hero-sub { font-size: 16.5px; color: var(--ink-2); max-width: 46ch; margin: 0 0 26px; }
+  .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .hero-note { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-top: 16px; }
+
+  /* Hero 演示窗（像素桌宠 canvas） */
+  .demo {
+    border: 2px solid var(--ink); border-radius: var(--radius);
+    background: var(--panel); box-shadow: var(--shadow-lg); overflow: hidden;
+  }
+  .demo-bar {
+    display: flex; align-items: center; gap: 7px;
+    padding: 9px 12px; border-bottom: 2px solid var(--line); background: var(--nav);
+  }
+  .demo-bar .tl { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--ink); }
+  .demo-bar .tl.r { background: var(--coral); } .demo-bar .tl.y { background: var(--lemon); }
+  .demo-bar .tl.g { background: var(--mint); }
+  .demo-bar .cap { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-left: 6px; }
+  #petCanvas { display: block; width: 100%; height: 300px; image-rendering: pixelated; }
+
+  /* ============ 分区通用 ============ */
+  section { padding: 56px 0; }
+  .sec-head { max-width: 640px; margin: 0 0 32px; }
+  .sec-tag {
+    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px;
+  }
+  h2.sec-title {
+    font-family: var(--mono); font-weight: 700; font-size: clamp(24px, 3.4vw, 32px);
+    letter-spacing: -0.02em; margin: 0 0 8px; text-wrap: balance;
+  }
+  h2.sec-title::after {
+    content: ''; display: block; width: 30px; height: 3px; margin-top: 12px;
+    background: var(--lemon); box-shadow: 4px 0 0 var(--sky), 8px 0 0 var(--coral);
+  }
+  .sec-desc { color: var(--ink-2); font-size: 15.5px; margin: 12px 0 0; }
+
+  /* 像素卡片 */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card {
+    border: 2px solid var(--line); border-radius: var(--radius);
+    background: var(--panel); padding: 22px; box-shadow: var(--shadow-sm);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+  }
+  .card:hover { transform: translate(-2px,-2px); border-color: var(--ink); box-shadow: var(--shadow); }
+  .card-ico {
+    width: 40px; height: 40px; display: grid; place-items: center;
+    border: 2px solid var(--ink); border-radius: 9px; font-size: 20px; margin-bottom: 14px;
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  .card h3 { font-family: var(--mono); font-size: 16px; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .card p { font-size: 14px; color: var(--ink-2); margin: 0; line-height: 1.6; }
+
+  /* 监控矩阵 */
+  .matrix-wrap { border: 2px solid var(--ink); border-radius: var(--radius); overflow: hidden;
+    box-shadow: var(--shadow); background: var(--panel); }
+  table.matrix { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .matrix th, .matrix td { padding: 14px 16px; text-align: center; border-bottom: 1.5px solid var(--line); }
+  .matrix th { font-family: var(--mono); font-weight: 700; background: var(--nav); }
+  .matrix thead th:first-child { text-align: left; }
+  .matrix tbody th { text-align: left; font-family: var(--mono); background: var(--panel); }
+  .matrix tr:last-child td, .matrix tr:last-child th { border-bottom: none; }
+  .yes { color: var(--mint); font-family: var(--mono); font-weight: 700; }
+  .no  { color: var(--ink-3); font-family: var(--mono); }
+  .matrix-foot { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-top: 14px; }
+
+  /* 换肤展示 */
+  .skins { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 32px; align-items: center; }
+  .skin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .skin {
+    aspect-ratio: 1; display: grid; place-items: center; position: relative;
+    border: 2px solid var(--line); border-radius: var(--radius); background: var(--panel);
+    box-shadow: var(--shadow-sm); font-size: 40px;
+  }
+  .skin.sel { border-color: var(--ink); box-shadow: 3px 3px 0 var(--sky); }
+  .skin .tag {
+    position: absolute; top: 6px; left: 6px; font-family: var(--mono); font-size: 8.5px;
+    font-weight: 700; padding: 2px 5px; border-radius: 4px;
+  }
+  .tag.off { background: color-mix(in srgb, var(--sky) 15%, var(--panel)); color: var(--sky); }
+  .tag.imp { background: color-mix(in srgb, var(--mint) 16%, var(--panel)); color: #0f9b80; }
+
+  /* 隐私条 */
+  .privacy { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .priv {
+    border: 2px solid var(--line); border-radius: var(--radius); background: var(--panel);
+    padding: 18px; box-shadow: var(--shadow-sm);
+  }
+  .priv .k { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-bottom: 6px; }
+  .priv .v { font-size: 14px; font-weight: 600; line-height: 1.4; }
+
+  /* CTA 区 */
+  .cta-box {
+    border: 2px solid var(--ink); border-radius: var(--radius); background: var(--nav);
+    box-shadow: var(--shadow-lg); padding: 44px; text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .cta-box h2 { font-family: var(--mono); font-size: clamp(24px,3.4vw,32px); margin: 0 0 10px;
+    letter-spacing: -0.02em; }
+  .cta-box p { color: var(--ink-2); margin: 0 0 24px; }
+  .cta-box .btn { font-size: 15px; padding: 13px 24px; }
+  .cta-pixels { position: absolute; inset: 0; pointer-events: none; opacity: 0.5; }
+
+  /* 页脚 */
+  footer {
+    border-top: 2px solid var(--line); margin-top: 40px; padding: 28px 0 40px;
+  }
+  .foot-inner { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .foot-inner .brand { font-size: 13px; }
+  .foot-meta { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+
+  /* 响应式 */
+  @media (max-width: 860px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 30px; }
+    .cards { grid-template-columns: 1fr; }
+    .skins { grid-template-columns: 1fr; }
+    .privacy { grid-template-columns: repeat(2, 1fr); }
+    .nav-links a:not(.btn) { display: none; }
+    .matrix-wrap { overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top"><span class="logo-mark"></span>桌宠 · DeskPet</a>
+    <nav class="nav-links">
+      <a href="#watch">监控</a>
+      <a href="#skins">换肤</a>
+      <a href="#privacy">隐私</a>
+      <button class="theme-btn" id="themeBtn" aria-label="切换主题">◐ 主题</button>
+      <a href="#download" class="btn small">下载</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow"><span class="dot-live"></span>本地运行 · 零系统权限</span>
+        <h1 class="hero-title">一只<span class="hl">替你盯着 AI</span> 干活的桌面小伙伴</h1>
+        <p class="hero-sub">
+          它安静住在你的 macOS 桌面上，帮你看着 Codex / Claude Code。
+          任务<strong>停下来时</strong>（完成、需要你、出错、中断）第一时间戳你一下，
+          并说清是为什么停的——正在忙时只静静做个思考表情，不打扰你。
+        </p>
+        <div class="hero-cta">
+          <a href="#download" class="btn">↓ 下载 macOS 版</a>
+          <a href="#watch" class="btn ghost">看它怎么工作</a>
+        </div>
+        <p class="hero-note">// 纯本地只读 · 不联网 · 不读你的代码 · 免费内测</p>
+      </div>
+      <div class="demo" aria-label="桌宠实时演示">
+        <div class="demo-bar">
+          <span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+          <span class="cap">~/your-desktop</span>
+        </div>
+        <canvas id="petCanvas" width="880" height="600"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- 监控 -->
+  <section id="watch">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-tag">// 核心能力</div>
+        <h2 class="sec-title">任务一停，1 秒内提醒你</h2>
+        <p class="sec-desc">
+          你把活儿交给 Codex / Claude Code，人可以走开。它替你守着，
+          任务停下的那一刻就冒个气泡叫你回来——不用一直盯着终端。
+        </p>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-ico" style="color:var(--mint)">✅</div>
+          <h3>说清为什么停</h3>
+          <p>是输出结束（完成）、需要你处理（授权 / 回答 / 帮忙验证）、还是出错中断——气泡里直接写明白，不用你去猜。</p>
+        </div>
+        <div class="card">
+          <div class="card-ico" style="color:var(--sky)">🛰️</div>
+          <h3>覆盖你实际在用的地方</h3>
+          <p>终端、VS Code 插件、桌面客户端里跑的 Codex / Claude Code 都能盯。想只盯某几个环境？逐个勾选。</p>
+        </div>
+        <div class="card">
+          <div class="card-ico" style="color:var(--lemon)">🤫</div>
+          <h3>忙时不打扰</h3>
+          <p>正在干活时只做个安静的思考表情，绝不弹气泡。只有真正停下来时才出声，把打扰降到最低。</p>
+        </div>
+      </div>
+
+      <div style="margin-top:32px">
+        <div class="matrix-wrap">
+          <table class="matrix">
+            <thead>
+              <tr><th>监控覆盖</th><th>终端</th><th>VS&nbsp;Code</th><th>客户端</th></tr>
+            </thead>
+            <tbody>
+              <tr><th>Codex</th><td class="yes">●</td><td class="yes">●</td><td class="yes">●</td></tr>
+              <tr><th>Claude&nbsp;Code</th><td class="yes">●</td><td class="yes">●</td><td class="yes">●</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="matrix-foot">// 每家、每个环境都能单独开关 · 纯网页端会话在云端，暂不支持</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 换肤 -->
+  <section id="skins">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-tag">// 你的桌宠你做主</div>
+        <h2 class="sec-title">换个皮肤，或直接拖张图进来</h2>
+        <p class="sec-desc">
+          官方内置几只，也能导入你自己的图片当桌宠——选一张 PNG / SVG，
+          还能自动去掉纯色背景，一张图就变成一只专属小伙伴。
+        </p>
+      </div>
+      <div class="skins">
+        <div class="skin-grid">
+          <div class="skin sel"><span class="tag off">官方</span>🐱</div>
+          <div class="skin"><span class="tag off">官方</span>🐤</div>
+          <div class="skin"><span class="tag off">官方</span>🫧</div>
+          <div class="skin"><span class="tag imp">已导入</span>🐸</div>
+          <div class="skin"><span class="tag imp">已导入</span>🦊</div>
+          <div class="skin" style="font-size:22px;color:var(--ink-3);font-family:var(--mono)">＋<br>导入</div>
+        </div>
+        <div>
+          <h3 style="font-family:var(--mono);font-size:18px;margin:0 0 12px;letter-spacing:-0.01em">一张图 → 一只桌宠</h3>
+          <p style="color:var(--ink-2);font-size:14.5px;margin:0 0 16px">
+            导入图片时自动抠掉纯色背景（黑底 / 白底会被抠成透明，复杂背景保持原样）。
+            导入的皮肤能随时改名、删除；官方皮肤永远在。
+          </p>
+          <ul style="list-style:none;padding:0;margin:0;display:grid;gap:10px;font-size:14px">
+            <li>▸ <strong>PNG / WebP / SVG</strong> 都能导</li>
+            <li>▸ 一个「导入皮肤」按钮，自动识别图片还是皮肤包</li>
+            <li>▸ 抠图在本地跑，图片不上传任何服务器</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 隐私 -->
+  <section id="privacy">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-tag">// 我们不碰你的东西</div>
+        <h2 class="sec-title">纯本地，越界的事一件都不做</h2>
+        <p class="sec-desc">它只读本机会话状态文件来判断「AI 停没停」，除此之外什么都不碰。</p>
+      </div>
+      <div class="privacy">
+        <div class="priv"><div class="k">网络</div><div class="v" style="color:var(--mint)">从不联网</div></div>
+        <div class="priv"><div class="k">你的代码</div><div class="v" style="color:var(--mint)">从不读取</div></div>
+        <div class="priv"><div class="k">系统权限</div><div class="v" style="color:var(--mint)">零权限</div></div>
+        <div class="priv"><div class="k">上传</div><div class="v" style="color:var(--mint)">零上传</div></div>
+      </div>
+      <p class="matrix-foot">// 不要辅助功能 / AppleScript / 窗口聚焦 · 只在本机读取，只为提醒你</p>
+    </div>
+  </section>
+
+  <!-- 下载 CTA -->
+  <section id="download">
+    <div class="wrap">
+      <div class="cta-box">
+        <canvas class="cta-pixels" id="ctaCanvas" width="1000" height="260"></canvas>
+        <div style="position:relative">
+          <h2>把它请到你的桌面上</h2>
+          <p>免费内测 · 仅 macOS（Apple Silicon）· 一次下载，安静常驻</p>
+          <a href="#" class="btn">↓ 下载 DeskPet for macOS</a>
+          <p class="hero-note" style="margin-top:18px">// 内测 ad-hoc 签名，首次打开右键选「打开」即可</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <span class="brand"><span class="logo-mark"></span>桌宠 · DeskPet</span>
+    <span class="foot-meta">MVP 0.3 · 帮你盯着 AI 干活的小伙伴 · 2026</span>
+  </div>
+</footer>
+
+<script>
+  // ---------- 主题切换 ----------
+  (function () {
+    var btn = document.getElementById('themeBtn');
+    var root = document.documentElement;
+    btn.addEventListener('click', function () {
+      var cur = root.getAttribute('data-theme');
+      if (!cur) {
+        cur = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+    });
+  })();
+
+  // ---------- Hero 像素桌宠演示 ----------
+  (function () {
+    var canvas = document.getElementById('petCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+    // 一只 12x12 像素猫（用点阵定义），颜色索引
+    // 0=空 1=描边 2=身体 3=腮红 4=眼
+    var CAT = [
+      "000000000000",
+      "010000000010",
+      "011000000110",
+      "011111111110",
+      "012112211210",
+      "012112211210",
+      "011411141110",  // 眼
+      "011111111110",
+      "013111111310",  // 腮红
+      "011111111110",
+      "010111111010",
+      "000000000000"
+    ];
+    var THINK = [ // 想事时眼睛眯（换一行眼）
+      "011114411110"
+    ];
+
+    var t = 0;
+    // 状态循环：idle(思考) → done(气泡) → 停留 → 循环
+    var phase = 0;          // 0 idle, 1 working, 2 done-bubble
+    var phaseT = 0;
+    var bubbleAlpha = 0;
+
+    function drawPet(px, py, scale, thinking) {
+      var stroke = css('--ink');
+      var body   = '#ffd9a8';
+      var bodyD  = '#f6c98a';
+      var blush  = css('--coral');
+      var eye    = css('--ink');
+      var pal = { '1': stroke, '2': body, '3': blush, '4': eye };
+      // 呼吸：整体轻微上下
+      var breathe = thinking ? Math.sin(t*0.05)*1.2 : Math.sin(t*0.08)*2.2;
+      for (var y=0; y<CAT.length; y++){
+        var row = CAT[y];
+        if (thinking && y===6) row = THINK[0];
+        for (var x=0; x<row.length; x++){
+          var c = row[x];
+          if (c==='0') continue;
+          var col = pal[c] || body;
+          // 身体下半用暗一点
+          if (c==='2' && y>7) col = bodyD;
+          ctx.fillStyle = col;
+          ctx.fillRect(
+            Math.round(px + x*scale),
+            Math.round(py + y*scale + breathe),
+            Math.ceil(scale), Math.ceil(scale)
+          );
+        }
+      }
+    }
+
+    function roundRect(x,y,w,h,r){
+      ctx.beginPath();
+      ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+      ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r);
+      ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+    }
+
+    function drawBubble(cx, cy, alpha, kind) {
+      if (alpha<=0) return;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      var w = 230, h = 74, x = cx - w/2, y = cy - h - 30;
+      // 像素硬阴影
+      ctx.fillStyle = css('--ink');
+      roundRect(x+5, y+5, w, h, 12); ctx.fill();
+      // 底
+      ctx.fillStyle = css('--panel');
+      roundRect(x, y, w, h, 12); ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = css('--ink');
+      roundRect(x, y, w, h, 12); ctx.stroke();
+      // 小尾巴
+      ctx.fillStyle = css('--panel');
+      ctx.beginPath();
+      ctx.moveTo(cx-10, y+h-1); ctx.lineTo(cx+10, y+h-1); ctx.lineTo(cx, y+h+16); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      // 文字
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = css('--mint');
+      ctx.font = "700 22px " + css('--mono').split(',')[0];
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('✅ 任务完成', cx, y+28);
+      ctx.fillStyle = css('--ink-2');
+      ctx.font = "14px " + css('--sans').split(',')[0];
+      ctx.fillText('Claude Code 输出结束了', cx, y+52);
+      ctx.restore();
+    }
+
+    function frame() {
+      ctx.clearRect(0,0,W,H);
+      // 背景点阵网格（很淡）
+      ctx.fillStyle = css('--line');
+      for (var gx=40; gx<W; gx+=40){
+        for (var gy=40; gy<H; gy+=40){
+          ctx.globalAlpha = 0.5;
+          ctx.fillRect(gx, gy, 2, 2);
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      var scale = 20;
+      var petW = 12*scale;
+      var px = W/2 - petW/2;
+      var py = H/2 - petW/2 + 24;
+
+      var thinking = (phase === 1);
+      drawPet(px, py, scale, thinking);
+
+      // 气泡淡入淡出
+      if (phase === 2) bubbleAlpha = Math.min(1, bubbleAlpha + 0.06);
+      else bubbleAlpha = Math.max(0, bubbleAlpha - 0.08);
+      drawBubble(W/2, py, bubbleAlpha, 'done');
+
+      // 阶段推进
+      phaseT++;
+      if (phase === 0 && phaseT > 130) { phase = 1; phaseT = 0; }        // idle→working
+      else if (phase === 1 && phaseT > 150) { phase = 2; phaseT = 0; }   // working→done
+      else if (phase === 2 && phaseT > 200) { phase = 0; phaseT = 0; }   // done→idle
+
+      t++;
+      if (!reduce) requestAnimationFrame(frame);
+    }
+    if (reduce) { phase = 2; phaseT = 0; bubbleAlpha = 1; frame(); }
+    else frame();
+  })();
+
+  // ---------- CTA 背景漂浮像素 ----------
+  (function () {
+    var c = document.getElementById('ctaCanvas');
+    if (!c) return;
+    var ctx = c.getContext('2d');
+    var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+    var cols = [css('--sky'), css('--mint'), css('--coral'), css('--lemon')];
+    var bits = [];
+    for (var i=0;i<26;i++){
+      bits.push({ x: Math.random()*c.width, y: Math.random()*c.height,
+        s: 5+Math.random()*7, vy: 0.2+Math.random()*0.4, col: cols[i%4], a: 0.15+Math.random()*0.25 });
+    }
+    function frame(){
+      ctx.clearRect(0,0,c.width,c.height);
+      for (var b of bits){
+        ctx.globalAlpha = b.a; ctx.fillStyle = b.col;
+        ctx.fillRect(Math.round(b.x), Math.round(b.y), b.s, b.s);
+        b.y -= b.vy; if (b.y < -10){ b.y = c.height+10; b.x = Math.random()*c.width; }
+      }
+      ctx.globalAlpha = 1;
+      if (!reduce) requestAnimationFrame(frame);
+    }
+    frame();
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140" width="140" height="140" role="img" aria-label="软软团 failed">
+  <ellipse cx="70" cy="120" rx="34" ry="8" fill="#000000" opacity="0.06"/>
+  <path d="M28 94 C28 58 46 40 70 40 C94 40 112 58 112 94 C112 110 104 120 96 115 C91 124 79 124 74 117 C72 120 68 120 66 117 C61 124 49 124 44 115 C36 120 28 110 28 94 Z"
+        fill="#8FA8D6" stroke="#6C84B4" stroke-width="3" stroke-linejoin="round"/>
+  <ellipse cx="54" cy="62" rx="12" ry="7" fill="#AEC0E4" opacity="0.6" transform="rotate(-18 54 62)"/>
+  <g stroke="#26324D" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M49 90 q7 -5 14 0"/>
+    <path d="M77 90 q7 -5 14 0"/>
+  </g>
+  <path d="M65 103 q5 -4 10 0" stroke="#26324D" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+  <ellipse cx="44" cy="100" rx="6" ry="3.5" fill="#B9A0C4" opacity="0.6"/>
+  <ellipse cx="96" cy="100" rx="6" ry="3.5" fill="#B9A0C4" opacity="0.6"/>
+  <g transform="translate(104 44)" stroke="#E1553F" stroke-width="3" stroke-linecap="round">
+    <path d="M-6 -6 L6 6"/>
+    <path d="M6 -6 L-6 6"/>
+  </g>
+</svg>

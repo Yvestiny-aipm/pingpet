@@ -1,0 +1,973 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* ============ 宠物窗口 ============ */
+
+body[data-route='pet'] {
+  background: transparent;
+}
+
+.pet-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  /* 透明区域不接鼠标事件，只有宠物本体接（配合主进程的鼠标穿透） */
+  pointer-events: none;
+}
+
+/* 气泡容器：窗口左上角的零尺寸原点，用内联 transform 平移到目标坐标；
+   flex 居中让气泡中心恰好落在原点上——居中交给布局，不占用 transform，
+   避免与入场动画的 transform 冲突（fill-mode 会覆盖内联 transform 导致跳位）。 */
+.bubble-slot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.bubble {
+  position: relative;
+  flex: none; /* 阻止零尺寸 flex 容器把气泡压缩 */
+  width: max-content;
+  max-width: 220px;
+  padding: 9px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 14px rgba(80, 60, 40, 0.14);
+  color: #4a4038;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  cursor: grab;
+  pointer-events: auto;
+  animation: bubble-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* 只改指针样式；千万不要动 animation——移除再恢复会重播动画并让 fill 状态跳变 */
+.bubble--dragging {
+  cursor: grabbing;
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.pet-hitbox {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 140px;
+  height: 140px;
+  margin-left: -70px;
+  margin-top: -70px;
+  transform-origin: center center;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.pet-hitbox:active {
+  cursor: grabbing;
+}
+
+.pet-anim {
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+}
+
+.pet-anim--idle {
+  animation: pet-breathe 3.4s ease-in-out infinite;
+}
+
+.pet-anim--happy {
+  animation:
+    pet-hop 0.5s ease-in-out 2,
+    pet-breathe 3.4s ease-in-out 1s infinite;
+}
+
+.pet-anim--sleepy {
+  animation: pet-sway 4s ease-in-out infinite;
+}
+
+.pet-anim--attention {
+  animation:
+    pet-shake 0.4s ease-in-out 2,
+    pet-breathe 3.4s ease-in-out 0.8s infinite;
+}
+
+/* v0.2 Agent：working 时的慢脉冲（比 breathe 更明显、更慢，像在思考） */
+.pet-anim--thinking {
+  animation: pet-think 1.8s ease-in-out infinite;
+}
+
+/* v0.2 Agent：failed 时先垂头一下，再保持轻微下沉的姿态 */
+.pet-anim--failed {
+  animation:
+    pet-droop 0.6s ease-out both,
+    pet-breathe 3.4s ease-in-out 0.6s infinite;
+}
+
+@keyframes pet-breathe {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(1.015, 1.035);
+  }
+}
+
+@keyframes pet-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-16px);
+  }
+}
+
+@keyframes pet-sway {
+  0%,
+  100% {
+    transform: rotate(-2.2deg);
+  }
+  50% {
+    transform: rotate(2.2deg);
+  }
+}
+
+@keyframes pet-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+
+/* v0.2：思考中——缓慢的呼吸式脉冲 + 极轻微上下浮动 */
+@keyframes pet-think {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.02, 1.02);
+  }
+}
+
+/* v0.2：失败——垂头（整体下沉 + 轻微前倾） */
+@keyframes pet-droop {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  60% {
+    transform: translateY(6px) rotate(-4deg);
+  }
+  100% {
+    transform: translateY(4px) rotate(-3deg);
+  }
+}
+
+.pet-emote {
+  position: absolute;
+  pointer-events: none;
+}
+
+.pet-emote--zzz {
+  top: -6px;
+  right: 2px;
+  color: #8f9bb3;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  animation: emote-float 2.4s ease-in-out infinite;
+}
+
+.pet-emote--alert {
+  top: -10px;
+  right: 16px;
+  color: #f0a35e;
+  font-size: 20px;
+  font-weight: 700;
+  animation: emote-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* v0.2：思考中的省略号，缓慢起伏 */
+.pet-emote--think {
+  top: -8px;
+  right: 8px;
+  color: #7a93c8;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  animation: emote-float 1.8s ease-in-out infinite;
+}
+
+/* v0.2：失败的叉，弹出后停住 */
+.pet-emote--fail {
+  top: -8px;
+  right: 14px;
+  color: #d9736b;
+  font-size: 19px;
+  font-weight: 700;
+  animation: emote-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes emote-float {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+@keyframes emote-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+
+
+/* ============================================================
+   设置窗口 · v0.4 视觉改版（清新极简 + 像素风 + 鲜艳点缀）
+   设计语言：暖白底、方角化、2px 实心边框 + 硬阴影（不模糊）、
+   四个鲜艳点缀色克制使用、品牌/标题/数字用等宽像素质感。
+   ============================================================ */
+
+:root {
+  /* —— 底色（清新暖白，不发灰） —— */
+  --p-bg:        #fbfaf6;   /* 面板底 */
+  --p-nav:       #f2f0e9;   /* 左侧导航底 */
+  --p-card:      #ffffff;   /* 卡片白 */
+  --p-line:      #e7e3d8;   /* 边框/描边 */
+  --p-ink:       #2a2925;   /* 主文字（暖黑） */
+  --p-ink-soft:  #7d7a70;   /* 次要文字 */
+  --p-ink-faint: #a8a49a;   /* 更淡 */
+  /* —— 四个鲜艳点缀色 —— */
+  --p-coral:  #ff5d5d;   /* 珊瑚红：危险/删除/失败 */
+  --p-mint:   #17c3a2;   /* 薄荷绿：成功/已导入/开 */
+  --p-lemon:  #ffca28;   /* 柠檬黄：强调/高亮 */
+  --p-sky:    #3d8bff;   /* 天蓝：主色/选中/链接 */
+  /* —— 像素硬阴影 —— */
+  --p-shadow:     2px 2px 0 var(--p-ink);
+  --p-shadow-sky: 2px 2px 0 var(--p-sky);
+  /* 等宽像素质感字体栈（系统自带，不打包外部字体） */
+  --p-mono: ui-monospace, 'SF Mono', 'DejaVu Sans Mono', 'Menlo', monospace;
+}
+
+body[data-route='settings'] {
+  background: var(--p-bg);
+  color: var(--p-ink);
+}
+
+.settings {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  overflow: hidden;
+}
+
+/* ---------- 左侧导航 ---------- */
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 14px;
+  background: var(--p-nav);
+  border-right: 2px solid var(--p-line);
+}
+
+.settings-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--p-mono);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--p-ink);
+  padding: 4px 8px 18px;
+}
+/* 品牌点做成像素方块（三色叠角，8-bit 感），非圆点 */
+.settings-brand-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 0;                 /* 方角 = 像素 */
+  background:
+    linear-gradient(135deg, var(--p-lemon) 0 50%, transparent 50%),
+    linear-gradient(-45deg, var(--p-coral) 0 50%, var(--p-sky) 50%);
+  box-shadow: 1.5px 1.5px 0 var(--p-ink);
+  image-rendering: pixelated;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 2px solid transparent;
+  border-radius: 8px;               /* 收小圆角，偏方 */
+  background: transparent;
+  color: var(--p-ink-soft);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+.settings-nav-item:hover {
+  background: rgba(0, 0, 0, 0.035);
+  color: var(--p-ink);
+}
+/* 选中态：白底 + 硬边框 + 硬阴影（像素卡片感） */
+.settings-nav-item.is-active {
+  background: var(--p-card);
+  color: var(--p-ink);
+  font-weight: 700;
+  border-color: var(--p-ink);
+  box-shadow: var(--p-shadow);
+}
+.settings-nav-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+.settings-nav-foot {
+  margin-top: auto;
+  padding: 8px 10px 2px;
+  font-family: var(--p-mono);
+  font-size: 10.5px;
+  color: var(--p-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 右侧面板 ---------- */
+.settings-panel {
+  padding: 26px 30px 30px;
+  overflow-y: auto;
+}
+
+.panel-head {
+  margin-bottom: 18px;
+}
+.panel-head h2 {
+  font-family: var(--p-mono);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--p-ink);
+  margin: 0 0 5px;
+}
+/* 标题下一条鲜艳像素小横杠做点缀 */
+.panel-head h2::after {
+  content: '';
+  display: block;
+  width: 26px;
+  height: 3px;
+  margin-top: 6px;
+  background: var(--p-lemon);
+  box-shadow: 3px 0 0 var(--p-sky), 6px 0 0 var(--p-coral);
+}
+.panel-head p {
+  font-size: 12.5px;
+  color: var(--p-ink-soft);
+  margin: 8px 0 0;
+}
+
+/* ---------- 通用字段卡片 ---------- */
+.field-card {
+  background: var(--p-card);
+  border: 2px solid var(--p-line);
+  border-radius: 12px;
+  padding: 4px 16px;
+  margin-top: 14px;
+}
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 46px;
+  padding: 8px 0;
+  font-size: 13.5px;
+}
+.field-row + .field-row {
+  border-top: 1px solid var(--p-line);
+}
+.field-label {
+  color: var(--p-ink);
+}
+
+/* 监控环境多选行 */
+.env-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 0 10px 0;
+  padding-left: 16px;
+}
+.env-row-label {
+  font-size: 12px;
+  color: var(--p-ink-faint);
+  flex: none;
+}
+.env-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* 环境 chip：方角像素小标签 */
+.env-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1.5px solid var(--p-line);
+  background: var(--p-nav);
+  font-size: 12.5px;
+  color: var(--p-ink-soft);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.env-chip:hover { border-color: var(--p-ink-faint); }
+.env-chip input {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--p-sky);
+}
+.field-row input[type='range'] {
+  flex: 1;
+  accent-color: var(--p-sky);
+}
+.field-row select {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 2px solid var(--p-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--p-ink);
+  cursor: pointer;
+}
+.field-row select:focus { outline: none; border-color: var(--p-sky); }
+.field-row--buttons {
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.row-value {
+  min-width: 46px;
+  text-align: right;
+  font-family: var(--p-mono);
+  color: var(--p-sky);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 开关（方角像素拨杆） ---------- */
+.switch {
+  appearance: none;
+  width: 44px;
+  height: 26px;
+  border-radius: 6px;
+  border: 2px solid var(--p-ink);
+  background: #e9e6dc;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.18s ease;
+  flex-shrink: 0;
+}
+.switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: #fff;
+  border: 1.5px solid var(--p-ink);
+  transition: transform 0.18s ease;
+}
+.switch:checked {
+  background: var(--p-mint);
+}
+.switch:checked::before {
+  transform: translateX(18px);
+}
+
+/* ---------- 宠物网格 ---------- */
+.pet-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+/* 宠物卡片：方角像素卡 + hover 硬阴影上浮 */
+.pet-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 16px 8px 12px;
+  border: 2px solid var(--p-line);
+  border-radius: 12px;
+  background: var(--p-card);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+.pet-card:hover {
+  transform: translate(-2px, -2px);
+  border-color: var(--p-ink);
+  box-shadow: var(--p-shadow);
+}
+.pet-card.is-selected {
+  border-color: var(--p-ink);
+  box-shadow: var(--p-shadow-sky);
+}
+.pet-card-preview {
+  width: 66px;
+  height: 66px;
+  margin: 2px 0 4px;
+  image-rendering: pixelated;       /* 像素素材保持利落 */
+}
+.pet-card-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--p-ink);
+}
+.pet-card-name-input {
+  width: 90%;
+  max-width: 130px;
+  padding: 3px 6px;
+  border: 2px solid var(--p-sky);
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--p-ink);
+  text-align: center;
+  font-family: inherit;
+  outline: none;
+}
+.pet-card-desc {
+  font-size: 10.5px;
+  color: var(--p-ink-faint);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.pet-pack-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  image-rendering: pixelated;
+}
+
+/* 来源标签：方角像素小胶囊，用点缀色 */
+.pet-card-source {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-family: var(--p-mono);
+  font-size: 9px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.pet-card-source--official {
+  background: color-mix(in srgb, var(--p-sky) 15%, #fff);
+  color: var(--p-sky);
+}
+.pet-card-source--imported {
+  background: color-mix(in srgb, var(--p-mint) 16%, #fff);
+  color: #0f9b80;
+}
+
+/* 导入宠物操作按钮（改名/删除），悬停显现 */
+.pet-card-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.pet-card:hover .pet-card-actions { opacity: 1; }
+.pet-card-action {
+  font-size: 10px;
+  padding: 3px 7px;
+  border: 1.5px solid var(--p-line);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--p-ink-soft);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pet-card-action:hover { border-color: var(--p-ink-faint); background: var(--p-nav); }
+.pet-card-action--danger {
+  background: color-mix(in srgb, var(--p-coral) 12%, #fff);
+  color: var(--p-coral);
+  border-color: color-mix(in srgb, var(--p-coral) 30%, #fff);
+}
+.pet-card-action--danger:hover { background: color-mix(in srgb, var(--p-coral) 20%, #fff); }
+
+/* 皮肤包主操作按钮：像素实心按钮（天蓝 + 硬阴影） */
+.pet-pack-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.pet-pack-actions button {
+  flex: 1;
+  min-width: 150px;
+  padding: 11px 14px;
+  border: 2px solid var(--p-ink);
+  border-radius: 9px;
+  background: var(--p-sky);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--p-shadow);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.15s ease;
+}
+.pet-pack-actions button:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--p-ink);
+}
+.pet-pack-actions button:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--p-ink);
+}
+.pet-pack-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: var(--p-shadow);
+}
+.pet-pack-actions button.ghost {
+  background: #fff;
+  color: var(--p-ink);
+}
+.pet-pack-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--p-ink-faint);
+}
+.pet-pack-link {
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--p-sky);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.pet-pack-link:hover { color: #2c6fd6; }
+.pet-pack-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--p-ink);
+  cursor: pointer;
+}
+.pet-pack-toggle .switch { flex: none; margin-top: 1px; }
+.pet-pack-toggle em {
+  display: block;
+  margin-top: 2px;
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--p-ink-faint);
+}
+/* 错误提示：珊瑚红像素块 */
+.pet-pack-error {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--p-coral);
+  background: color-mix(in srgb, var(--p-coral) 9%, #fff);
+  border: 1.5px solid color-mix(in srgb, var(--p-coral) 30%, #fff);
+  padding: 9px 13px;
+  border-radius: 8px;
+}
+
+/* 通用 ghost 按钮 */
+.field-row--buttons .ghost {
+  padding: 9px 18px;
+  border: 2px solid var(--p-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--p-ink);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.field-row--buttons .ghost:hover { border-color: var(--p-ink); background: var(--p-nav); }
+
+/* 提示文字 */
+.hint-text {
+  margin: 14px 2px 0;
+  font-size: 12px;
+  color: var(--p-ink-soft);
+  line-height: 1.65;
+}
+.hint-text--muted {
+  color: var(--p-ink-faint);
+  font-size: 11.5px;
+}
+
+/* Agent 诊断区：像素信息板 */
+.agent-diag {
+  margin-top: 14px;
+  padding: 6px 16px;
+  background: var(--p-nav);
+  border: 2px solid var(--p-line);
+  border-radius: 10px;
+}
+.agent-diag-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--p-ink-soft);
+  padding: 8px 0;
+}
+.agent-diag-row + .agent-diag-row { border-top: 1px solid var(--p-line); }
+.agent-diag-row span:last-child {
+  color: var(--p-ink);
+  font-family: var(--p-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Agent 开发模拟 */
+.agent-sim {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 2px dashed var(--p-line);
+}
+.agent-sim-title {
+  font-family: var(--p-mono);
+  font-size: 10.5px;
+  color: var(--p-ink-faint);
+  margin-bottom: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.agent-sim-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.agent-sim-buttons button {
+  font-family: inherit;
+  font-size: 11.5px;
+  padding: 9px 11px;
+  border: 1.5px solid var(--p-line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--p-ink-soft);
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+.agent-sim-buttons button:hover { border-color: var(--p-ink-faint); background: var(--p-nav); }
+
+/* ---------- v0.4 在线形象库 ---------- */
+.lib-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 16px;
+  flex-wrap: wrap;
+}
+.lib-search {
+  flex: 1;
+  min-width: 140px;
+  padding: 9px 13px;
+  border: 2px solid var(--p-line);
+  border-radius: 9px;
+  background: var(--p-card);
+  color: var(--p-ink);
+  font-family: inherit;
+  font-size: 13.5px;
+  outline: none;
+}
+.lib-search:focus { border-color: var(--p-sky); }
+.lib-kinds { display: flex; gap: 6px; }
+.lib-kind {
+  padding: 8px 13px;
+  border: 2px solid var(--p-line);
+  border-radius: 8px;
+  background: var(--p-card);
+  color: var(--p-ink-soft);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.lib-kind:hover { border-color: var(--p-ink-faint); }
+.lib-kind.is-active { border-color: var(--p-ink); background: var(--p-nav); font-weight: 700; color: var(--p-ink); }
+
+.lib-hint { font-family: var(--p-mono); font-size: 12px; color: var(--p-ink-faint); margin: 12px 2px; }
+.lib-error {
+  margin: 12px 0;
+  padding: 12px 15px;
+  border: 2px solid color-mix(in srgb, var(--p-coral) 30%, #fff);
+  background: color-mix(in srgb, var(--p-coral) 9%, #fff);
+  color: var(--p-coral);
+  border-radius: 9px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lib-retry {
+  margin-left: auto;
+  padding: 5px 12px;
+  border: 2px solid currentColor;
+  border-radius: 7px;
+  background: none;
+  color: var(--p-coral);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.lib-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px 10px;
+  border: 2px solid var(--p-line);
+  border-radius: 12px;
+  background: var(--p-card);
+}
+/* 精灵图是 8 列 × 9 行；用 background-size 800%×900% 放大，定位左上，只显示第一帧 idle */
+.lib-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  background-color: var(--p-nav);
+  background-repeat: no-repeat;
+  background-size: 800% 900%;
+  background-position: 0% 0%;
+  image-rendering: pixelated;
+  margin-bottom: 6px;
+}
+.lib-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--p-ink);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lib-author { font-family: var(--p-mono); font-size: 9.5px; color: var(--p-ink-faint); margin-bottom: 6px; }
+.lib-install {
+  margin-top: auto;
+  width: 100%;
+  padding: 6px 8px;
+  border: 2px solid var(--p-ink);
+  border-radius: 7px;
+  background: var(--p-sky);
+  color: #fff;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 1.5px 1.5px 0 var(--p-ink);
+}
+.lib-install:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 2.5px 2.5px 0 var(--p-ink); }
+.lib-install:disabled { cursor: default; opacity: 0.9; }
+.lib-install.is-done { background: var(--p-mint); }
+
+/* 关于页 */
+.about-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 20px 0 10px;
+}
+.about-hero-pet {
+  width: 92px;
+  height: 92px;
+  margin-bottom: 8px;
+  image-rendering: pixelated;
+}
+.about-hero p {
+  font-size: 13px;
+  color: var(--p-ink-soft);
+  margin: 0;
+}

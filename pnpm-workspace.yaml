@@ -1,0 +1,12 @@
+allowBuilds:
+  electron: true
+  esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true
+onlyBuiltDependencies:
+  - electron
+  - esbuild
+  - onnxruntime-node
+  - protobufjs
+  - sharp

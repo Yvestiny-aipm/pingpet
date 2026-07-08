@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "sample-blob",
+  "name": "软软团",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "一只软乎乎的小蓝团（官方示例皮肤包）",
+  "accentColor": "#7AA7FF",
+  "thumbnail": "thumbnail.svg",
+  "states": {
+    "idle": "idle.svg",
+    "happy": "happy.svg",
+    "sleepy": "sleepy.svg",
+    "attention": "attention.svg",
+    "thinking": "thinking.svg",
+    "failed": "failed.svg"
+  }
+}

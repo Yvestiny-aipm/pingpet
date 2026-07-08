@@ -1,0 +1,31 @@
+# v0.1 内测打包配置：本地 ad-hoc 签名，不做 Developer ID 签名/公证。
+# 公开分发前需要：Apple Developer 账号 + Developer ID Application 证书 + 公证（notarize）+ stapler，详见 README。
+appId: com.example.desktoppetmvp
+productName: DesktopPetMVP
+directories:
+  buildResources: build
+  output: release
+# v0.4：注册 deskpet:// 自定义协议，让网页 deskpet://install?url=... 能唤起本 App 装宠物
+protocols:
+  - name: DeskPet Protocol
+    schemes:
+      - deskpet
+files:
+  - out/**
+  - package.json
+# v0.3：把官方内置皮肤包打进 App 的 Resources/pet-packs/official
+extraResources:
+  - from: resources/pet-packs/official
+    to: pet-packs/official
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.utilities
+  icon: build/icon.png
+  # identity: null → 跳过 Developer ID 签名；afterPack 会补一个本地 ad-hoc 签名，方便本机/内测启动。
+  identity: null
+afterPack: scripts/adhoc-sign-mac.cjs
+dmg:
+  artifactName: ${productName}-${version}.${ext}
+npmRebuild: false
