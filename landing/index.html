@@ -159,6 +159,12 @@
     font-weight:700; padding:3px 6px; border-radius:6px; }
   .tag.off { background:color-mix(in srgb,var(--c4) 14%,var(--panel)); color:var(--c4); }
   .tag.imp { background:color-mix(in srgb,var(--c2) 16%,var(--panel)); color:#0f9b80; }
+  /* 开源工牌吊牌 */
+  .opensource-grid { display:grid; grid-template-columns:1fr 1fr; gap:36px; align-items:center; }
+  .lanyard-stage { position:relative; height:560px; }
+  .lanyard-stage canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  @media (max-width:800px){ .opensource-grid{ grid-template-columns:1fr; } .lanyard-stage{ height:460px; } }
+
   /* 社区形象弧形画廊 */
   .pet-orbit-wrap { margin-top:8px; }
   .pet-orbit { height:300px; overflow:hidden; cursor:grab; outline:none; touch-action:pan-y; }
@@ -419,6 +425,19 @@
     </div>
   </section>
 
+  <!-- 开源工牌（React Bits Lanyard 移植：three.js + Verlet 绳，可拖拽甩、点击跳 GitHub） -->
+  <section id="opensource">
+    <div class="wrap opensource-grid">
+      <div>
+        <div class="sec-tag">// 即将开源</div>
+        <h2 class="sec-title">这个小项目，准备开源</h2>
+        <p class="sec-desc">PingPet 之后会把完整源码放上 GitHub。想第一时间拿到代码和新版本，认准这张工牌——拽一拽它，或者点一下直接去作者主页。</p>
+        <a class="btn" href="https://github.com/Yvestiny-aipm" target="_blank" rel="noreferrer">github.com/Yvestiny-aipm ↗</a>
+      </div>
+      <div class="lanyard-stage" id="lanyardStage" aria-label="可拖拽的 GitHub 工牌：Yvestiny-aipm"></div>
+    </div>
+  </section>
+
 </main>
 
 <footer>
@@ -456,6 +475,7 @@
 
 <script src="pet-anchors.js"></script>
 <script src="pet-gallery.js" defer></script>
+<script src="lanyard.js" defer></script>
 <script>
   // 主题切换
   (function(){
