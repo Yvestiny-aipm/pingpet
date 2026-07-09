@@ -181,20 +181,17 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord)
     combinedAura += (auraBand * 0.25) * phaseWindow * clamp(uScanOpacity, 0.0, 1.0);
 
   float lineVis = lineMask;
+  // 定制：线条只在扫描光经过时显现——黑色细线在紫光里以剪影浮现；静息时画布几乎全透明
   vec3 gridCol = uLinesColor * lineVis * fade;
   vec3 scanCol = uScanColor * combinedPulse;
   vec3 scanAura = uScanColor * combinedAura;
+  float carve = 1.0 - lineVis * 0.85; // 光带经过处，线条位置挖暗
+  color = gridCol + (scanCol + scanAura) * carve;
 
-    color = gridCol + scanCol + scanAura;
-
-  float n = fract(sin(dot(gl_FragCoord.xy + vec2(iTime * 123.4), vec2(12.9898,78.233))) * 43758.5453123);
-  color += (n - 0.5) * uNoise;
   color = clamp(color, 0.0, 1.0);
-  float alpha = clamp(max(lineVis, combinedPulse), 0.0, 1.0);
-  float gx = 1.0 - smoothstep(tx * 2.0, tx * 2.0 + aax * 2.0, ax);
-  float gy = 1.0 - smoothstep(ty * 2.0, ty * 2.0 + aay * 2.0, ay);
-  float halo = max(gx, gy) * fade;
-  alpha = max(alpha, halo * clamp(uBloomOpacity, 0.0, 1.0));
+  // alpha 只由扫描光决定 + 一丝极淡的常驻线（几乎与背景融为一体）
+  float alpha = clamp(max(combinedPulse, combinedAura), 0.0, 1.0);
+  alpha = max(alpha, lineVis * fade * 0.12);
   fragColor = vec4(color, alpha);
 }
 
@@ -212,8 +209,8 @@ function srgbColor(hex) {
 // 用法：mountGridScan(挂载容器)。配色/参数按官网品牌定制，其余对齐原组件 usage 示例。
 export function mountGridScan(container) {
   const OPTS = {
-    lineThickness: 1,
-    linesColor: '#5a4a92',   // 浅紫网格线（用户要求调浅；实际渲染经线性转换会偏暗，故取值偏亮）
+    lineThickness: 0.6,      // 细线（用户要求比 1 更细）
+    linesColor: '#000000',   // 黑色线条：静息隐形，扫描光里以剪影显现
     scanColor: '#c9a2ff',    // 品牌紫（亮）——扫描光
     scanOpacity: 0.4,
     gridScale: 0.1,
@@ -225,7 +222,7 @@ export function mountGridScan(container) {
     scanSoftness: 2,
     scanPhaseTaper: 0.9,
     scanDuration: 2.0,
-    scanDelay: 1.0,          // 2s 扫描 + 1s 间歇 = 每 3 秒发射一趟
+    scanDelay: 4.0,          // 2s 扫描 + 4s 间歇 = 每 6 秒发射一趟
     scanDirection: 0 // forward：只保留「由近到远」，按需求砍掉回程
   }
 
