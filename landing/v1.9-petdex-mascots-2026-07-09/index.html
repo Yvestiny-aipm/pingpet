@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>桌宠 DeskPet · 帮你盯着 Codex / Claude Code 的桌面小伙伴</title>
+<meta name="description" content="DeskPet 是一只住在 macOS 桌面上的像素小伙伴，帮你盯着 Codex / Claude Code —— 任务停下时第一时间提醒你，忙时不打扰。本地优先，无需账号，兼容 Codex 宠物格式。" />
+<meta property="og:title" content="桌宠 DeskPet · 帮你盯着 AI 干活的桌面小伙伴" />
+<meta property="og:description" content="任务一停就叫你回来，忙时绝不打扰。本地优先，无需账号。兼容 Codex 宠物格式，可从社区下载更多形象。" />
+<meta property="og:type" content="website" />
+<link rel="icon" type="image/png" href="logo.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "桌宠 DeskPet",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "macOS",
+  "description": "帮你盯着 Codex / Claude Code 的桌面陪伴宠物：任务停下时提醒你，忙时不打扰。本地优先，无需账号。",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --paper: #ffffff; --panel: #ffffff; --soft: #f6f6f4; --line: #ececea;
+    --ink: #17161a; --ink-2: #6b6a72; --ink-3: #a4a3ab;
+    /* 底部小人的柔和彩色 */
+    --c1: #ff6b5d; --c2: #16c79a; --c3: #ffc531; --c4: #4d8dff;
+    --c5: #9b6cf0; --c6: #ff9f45; --c7: #2ec5d3;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Menlo", "DejaVu Sans Mono", monospace;
+    --maxw: 1080px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper:#131217;--panel:#1a191f;--soft:#1e1d24;--line:#2c2b33;
+      --ink:#f5f4f2;--ink-2:#a9a8b2;--ink-3:#6f6e78; }
+  }
+  :root[data-theme="dark"] { --paper:#131217;--panel:#1a191f;--soft:#1e1d24;--line:#2c2b33;
+    --ink:#f5f4f2;--ink-2:#a9a8b2;--ink-3:#6f6e78; }
+  :root[data-theme="light"] { --paper:#ffffff;--panel:#ffffff;--soft:#f6f6f4;--line:#ececea;
+    --ink:#17161a;--ink-2:#6b6a72;--ink-3:#a4a3ab; }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto;} }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans);
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:var(--maxw); margin:0 auto; padding:0 28px; }
+  a { color:inherit; }
+
+  .logo-mark { width:22px; height:22px; flex:none; border-radius:6px; background:url('logo.png') center/cover no-repeat; }
+
+  header.nav { position:sticky; top:0; z-index:30;
+    background:color-mix(in srgb, var(--paper) 82%, transparent); backdrop-filter:blur(10px); }
+  .nav-inner { display:flex; align-items:center; gap:14px; height:66px; }
+  .brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:16px;
+    letter-spacing:-0.02em; text-decoration:none; color:var(--ink); }
+  .nav-links { margin-left:auto; display:flex; align-items:center; gap:4px; }
+  .nav-links a, .nav-links button.linklike { font-size:14px; color:var(--ink-2); text-decoration:none;
+    padding:8px 12px; border-radius:9px; background:none; border:none; font-family:inherit; cursor:pointer; }
+  .nav-links a:hover, .nav-links button.linklike:hover { background:var(--soft); color:var(--ink); }
+  .theme-btn { font-size:13px; border:1px solid var(--line); background:var(--panel);
+    color:var(--ink-2); border-radius:9px; padding:7px 11px; cursor:pointer; }
+  .theme-btn:hover { color:var(--ink); }
+
+  .btn { display:inline-flex; align-items:center; gap:9px; font-weight:700; font-size:15px;
+    padding:13px 24px; border:none; border-radius:999px; background:var(--ink); color:var(--paper);
+    cursor:pointer; text-decoration:none; font-family:inherit;
+    transition:transform 0.12s ease, opacity 0.12s ease; }
+  .btn:hover { transform:translateY(-1px); opacity:0.9; }
+  .btn.pill-sm { font-size:14px; padding:9px 18px; }
+  .btn.ghost { background:var(--soft); color:var(--ink); }
+
+  /* HERO */
+  .hero { position:relative; overflow:hidden; padding:0 0 88px; }
+  .hero-top { max-width:560px; padding:0; }
+  .hero-eyebrow { display:inline-flex; align-items:center; gap:9px; font-size:14px; font-weight:700;
+    color:var(--ink); margin-bottom:26px; }
+  .hero-eyebrow .logo-mark { width:26px; height:26px; }
+  h1.hero-title { font-weight:800; font-size:clamp(38px,5.2vw,62px); line-height:1.08;
+    letter-spacing:-0.035em; margin:0 0 22px; }
+  .hero-sub { font-size:18px; color:var(--ink-2); max-width:42ch; margin:0 0 20px; line-height:1.55; }
+  .hero-badges { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 28px; }
+  .badge { font-family:var(--mono); font-size:12px; color:var(--ink-2); background:var(--soft);
+    border:1px solid var(--line); border-radius:999px; padding:5px 12px; }
+  .hero-cta { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .hero-cta .note { font-size:13px; color:var(--ink-3); }
+
+  /* v1.7.1：Hero 两栏，首屏=100vh-导航66px，文字/小人第一屏内垂直居中；小人 80% 给头顶火焰留空间并右移 */
+  .hero-main { display:grid; grid-template-columns:1.05fr 0.95fr; gap:0; align-items:center;
+    min-height:calc(100vh - 140px); }
+  .hero-stage { position:relative; height:calc(100vh - 140px); display:flex; align-items:center; justify-content:center;
+    margin-right:-16%; }
+  .hero-stage canvas { position:absolute; inset:0; pointer-events:none; }
+  #heroFxBack { z-index:1; }
+  .hero-pet { position:relative; z-index:2; height:81%; width:auto; max-width:none;
+    image-rendering:pixelated; user-select:none; -webkit-user-drag:none;
+    filter:drop-shadow(0 30px 50px rgba(90,60,150,0.25)); }
+  #heroFxFront { z-index:3; }
+  @media (max-width:860px){
+    .hero-main { grid-template-columns:1fr; }
+    .hero-stage { height:60vh; margin-right:0; margin-top:6px; }
+  }
+
+  .mascots { position:relative; height:150px; margin-top:-10px; }
+  .mascot { position:absolute; bottom:0; width:var(--sz,118px); height:var(--sz,118px);
+    border-radius:30px; display:grid; place-items:center;
+    box-shadow:0 18px 40px -14px rgba(0,0,0,0.35); transform:rotate(var(--rot,0deg));
+    transition:transform 0.2s ease, bottom 0.2s ease; user-select:none; }
+  .mascot img { width:78%; height:82%; object-fit:contain; pointer-events:none;
+    filter:drop-shadow(0 4px 6px rgba(0,0,0,0.25)); }
+  .mascot:hover { transform:rotate(0deg) translateY(-14px); }
+  .mascot::after { content:''; position:absolute; top:16%; left:18%; width:12%; height:12%;
+    border-radius:3px; background:rgba(255,255,255,0.55); }
+
+  section { padding:88px 0; }
+  .sec-head { max-width:640px; margin:0 0 30px; }
+  .sec-tag { font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:0.06em;
+    text-transform:uppercase; color:var(--ink-3); margin-bottom:12px; }
+  h2.sec-title { font-weight:800; font-size:clamp(26px,3.6vw,38px); letter-spacing:-0.025em;
+    margin:0; text-wrap:balance; }
+  .sec-desc { color:var(--ink-2); font-size:16px; margin:14px 0 0; }
+
+  .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .card { border:1px solid var(--line); border-radius:20px; background:var(--panel); padding:26px;
+    transition:box-shadow 0.15s ease, transform 0.15s ease; }
+  .card:hover { transform:translateY(-3px); box-shadow:0 16px 34px -18px rgba(0,0,0,0.3); }
+  .card-ico { width:48px; height:48px; display:grid; place-items:center; border-radius:14px;
+    font-size:24px; margin-bottom:16px; }
+  .card h3 { font-size:17px; font-weight:700; margin:0 0 8px; letter-spacing:-0.01em; }
+  .card p { font-size:14.5px; color:var(--ink-2); margin:0; line-height:1.6; }
+
+  .matrix-wrap { border:1px solid var(--line); border-radius:20px; overflow:hidden; background:var(--panel); }
+  table.matrix { width:100%; border-collapse:collapse; font-size:15px; }
+  .matrix th, .matrix td { padding:15px 18px; text-align:center; border-bottom:1px solid var(--line); }
+  .matrix th { font-weight:700; background:var(--soft); }
+  .matrix thead th:first-child, .matrix tbody th { text-align:left; }
+  .matrix tbody th { background:var(--panel); font-family:var(--mono); font-size:14px; }
+  .matrix tr:last-child td, .matrix tr:last-child th { border-bottom:none; }
+  .yes { color:var(--c2); font-weight:800; } .soon { color:var(--ink-3); font-family:var(--mono); font-size:13px; }
+  .matrix-foot { font-family:var(--mono); font-size:12.5px; color:var(--ink-3); margin-top:14px; }
+
+  /* 换肤 + PetDex */
+  .skins { display:grid; grid-template-columns:1.05fr 0.95fr; gap:36px; align-items:center; }
+  .skin-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .skin { aspect-ratio:1; display:grid; place-items:center; position:relative; border:1px solid var(--line);
+    border-radius:20px; background:var(--panel); font-size:42px; }
+  .skin.sel { outline:3px solid var(--c4); outline-offset:-1px; }
+  .skin .tag { position:absolute; top:8px; left:8px; font-family:var(--mono); font-size:9px;
+    font-weight:700; padding:3px 6px; border-radius:6px; }
+  .tag.off { background:color-mix(in srgb,var(--c4) 14%,var(--panel)); color:var(--c4); }
+  .tag.imp { background:color-mix(in srgb,var(--c2) 16%,var(--panel)); color:#0f9b80; }
+  .petdex-box { border:1px solid var(--line); border-radius:16px; background:var(--soft);
+    padding:18px 20px; margin-top:20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .petdex-box .pd-ico { font-size:26px; }
+  .petdex-box .pd-txt { flex:1; min-width:200px; font-size:14px; color:var(--ink-2); }
+  .petdex-box .pd-txt strong { color:var(--ink); }
+  .code-line { font-family:var(--mono); font-size:13px; background:var(--panel); border:1px solid var(--line);
+    border-radius:8px; padding:6px 12px; color:var(--ink); white-space:nowrap; }
+  .pd-samples { margin-top:18px; }
+  .pd-sample-label { font-family:var(--mono); font-size:12px; color:var(--ink-3); margin-bottom:10px; }
+  .pd-sample-row { display:flex; gap:12px; flex-wrap:wrap; }
+  .pd-sample {
+    display:flex; align-items:center; gap:10px; padding:8px 10px 8px 8px;
+    border:1px solid var(--line); border-radius:14px; background:var(--panel);
+  }
+  .pd-sample-thumb {
+    width:44px; height:44px; border-radius:9px; background:var(--soft); flex:none;
+    background-repeat:no-repeat; background-size:800% 900%; background-position:0 0;
+    image-rendering:pixelated;
+  }
+  .pd-sample-name { font-size:13px; font-weight:700; max-width:88px; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; }
+  .pd-sample-btn {
+    padding:6px 12px; border:none; border-radius:999px; background:var(--ink); color:var(--paper);
+    font-family:inherit; font-size:12.5px; font-weight:700; cursor:pointer; text-decoration:none;
+    white-space:nowrap;
+  }
+  .pd-sample-btn:hover { opacity:0.9; }
+
+  .privacy { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .priv { border:1px solid var(--line); border-radius:18px; background:var(--panel); padding:20px; }
+  .priv .k { font-family:var(--mono); font-size:12px; color:var(--ink-3); margin-bottom:8px; }
+  .priv .v { font-size:15px; font-weight:700; color:var(--c2); }
+
+  .cta-box { border-radius:26px; background:var(--soft); padding:52px; text-align:center; }
+  .cta-box h2 { font-size:clamp(26px,3.6vw,38px); margin:0 0 12px; letter-spacing:-0.025em; font-weight:800; }
+  .cta-box p { color:var(--ink-2); margin:0 0 26px; }
+
+  footer { border-top:1px solid var(--line); margin-top:30px; padding:30px 0 44px; }
+  .foot-inner { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .foot-inner a.fl { font-size:13px; color:var(--ink-2); text-decoration:none; }
+  .foot-inner a.fl:hover { color:var(--ink); }
+  .foot-meta { margin-left:auto; font-family:var(--mono); font-size:12.5px; color:var(--ink-3); }
+
+  /* 下载弹窗 */
+  .modal { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.45); padding:24px; }
+  .modal.open { display:flex; }
+  .modal-card { background:var(--panel); border-radius:22px; max-width:440px; width:100%; padding:28px;
+    box-shadow:0 24px 60px -20px rgba(0,0,0,0.5); }
+  .modal-card h3 { margin:0 0 4px; font-size:20px; font-weight:800; }
+  .modal-card .msub { color:var(--ink-2); font-size:14px; margin:0 0 20px; }
+  .dl-opt { display:flex; align-items:center; gap:14px; border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px; text-decoration:none; color:var(--ink); margin-bottom:10px;
+    transition:border-color 0.12s ease, background 0.12s ease; }
+  .dl-opt:hover { border-color:var(--ink); background:var(--soft); }
+  .dl-opt .os { font-size:22px; }
+  .dl-opt .t { font-weight:700; font-size:14.5px; } .dl-opt .m { font-family:var(--mono); font-size:12px; color:var(--ink-3); }
+  .dl-opt .go { margin-left:auto; color:var(--ink-3); font-size:18px; }
+  .modal-close { margin-top:8px; width:100%; text-align:center; background:none; border:none;
+    color:var(--ink-3); font-size:13px; cursor:pointer; font-family:inherit; padding:8px; }
+
+  @media (max-width:860px){
+    .cards{grid-template-columns:1fr;} .skins{grid-template-columns:1fr;}
+    .privacy{grid-template-columns:repeat(2,1fr);} .nav-links a:not(.btn),.nav-links button.linklike{display:none;}
+    .matrix-wrap{overflow-x:auto;} h1.hero-title{font-size:clamp(34px,9vw,52px);}
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top"><span class="logo-mark"></span>桌宠 · DeskPet</a>
+    <nav class="nav-links">
+      <a href="#watch">监控</a>
+      <a href="#skins">换肤</a>
+      <a href="gallery.html">形象库</a>
+      <button class="theme-btn" id="themeBtn">◐ 主题</button>
+      <button class="btn pill-sm" id="dlBtnNav">下载</button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-main">
+        <div class="hero-top">
+          <span class="hero-eyebrow"><span class="logo-mark"></span>DeskPet · 桌面小伙伴</span>
+          <h1 class="hero-title">想要一只替你盯着<br>AI 的小家伙吗？</h1>
+          <p class="hero-sub">
+            它安静住在你的桌面上，帮你看着 Codex / Claude Code。
+            任务一停就叫你回来，忙时绝不打扰。
+          </p>
+          <div class="hero-badges">
+            <span class="badge">本地优先</span>
+            <span class="badge">无需账号</span>
+            <span class="badge">零系统权限</span>
+            <span class="badge">兼容 Codex 宠物格式</span>
+          </div>
+          <div class="hero-cta">
+            <button class="btn" id="dlBtnHero">下载 macOS 版</button>
+            <span class="note">免费内测 · 仅 macOS（Apple Silicon）</span>
+          </div>
+        </div>
+        <div class="hero-stage" id="heroStage">
+          <canvas id="heroFxBack"></canvas>
+          <img class="hero-pet" id="heroPet" src="pet-hero.png" alt="桌宠形象" />
+          <canvas id="heroFxFront"></canvas>
+        </div>
+      </div>
+
+      <div class="mascots" aria-label="桌宠形象库（形象来自 PetDex 社区，点击进入形象库）">
+        <a class="mascot" href="gallery.html" style="--sz:104px;--rot:-9deg;left:2%; background:var(--c5)" title="Yellow Rabbit · by Nobita D."><img src="mascots/yellow-rabbit.png" alt="Yellow Rabbit" loading="lazy"></a>
+        <a class="mascot" href="gallery.html" style="--sz:120px;--rot:-4deg;left:14%; background:var(--c4)" title="Prompt Penguin · by railly"><img src="mascots/prompt-penguin.png" alt="Prompt Penguin" loading="lazy"></a>
+        <a class="mascot" href="gallery.html" style="--sz:132px;--rot:2deg; left:28%; background:var(--c1)" title="Suketi the Cat · by luckytsar"><img src="mascots/suketi-the-cat.png" alt="Suketi the Cat" loading="lazy"></a>
+        <a class="mascot" href="gallery.html" style="--sz:118px;--rot:-3deg;left:42%; background:var(--c3)" title="Programmer Chicken · by 铉 李."><img src="mascots/programmer-chicken.png" alt="Programmer Chicken" loading="lazy"></a>
+        <a class="mascot" href="gallery.html" style="--sz:126px;--rot:4deg; left:55%; background:var(--c2)" title="Froggle · by phineas1500"><img src="mascots/froggle.png" alt="Froggle" loading="lazy"></a>
+        <a class="mascot" href="gallery.html" style="--sz:112px;--rot:-6deg;left:69%; background:var(--c6)" title="Nightly Fox · by norbertbodziony"><img src="mascots/nightly-fox.png" alt="Nightly Fox" loading="lazy"></a>
+        <a class="mascot" href="gallery.html" style="--sz:122px;--rot:6deg; left:81%; background:var(--c7)" title="Octopus · by daviddao"><img src="mascots/octopus.png" alt="Octopus" loading="lazy"></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 监控 -->
+  <section id="watch">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-tag">// 核心能力</div>
+        <h2 class="sec-title">任务一停，1 秒内提醒你</h2>
+        <p class="sec-desc">你把活儿交给 Codex / Claude Code，人可以走开。它替你守着，任务停下那一刻就冒气泡叫你回来。</p>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-ico" style="background:color-mix(in srgb,var(--c2) 16%,var(--panel));color:var(--c2)">✅</div>
+          <h3>说清为什么停</h3>
+          <p>完成、需要你处理（授权 / 回答 / 帮忙验证）、还是出错中断——气泡里直接写明白，不用你去猜。</p>
+        </div>
+        <div class="card">
+          <div class="card-ico" style="background:color-mix(in srgb,var(--c4) 16%,var(--panel));color:var(--c4)">🛰️</div>
+          <h3>覆盖你实际在用的地方</h3>
+          <p>终端、VS Code 插件、桌面客户端里的 Codex / Claude Code 都能盯。想只盯某几个环境？逐个勾选。</p>
+        </div>
+        <div class="card">
+          <div class="card-ico" style="background:color-mix(in srgb,var(--c3) 20%,var(--panel));color:#c99500">🤫</div>
+          <h3>忙时不打扰</h3>
+          <p>正在干活时只做个安静的思考表情，绝不弹气泡。只有真正停下来时才出声。</p>
+        </div>
+      </div>
+      <div style="margin-top:30px">
+        <div class="matrix-wrap">
+          <table class="matrix">
+            <thead><tr><th>监控覆盖</th><th>终端</th><th>VS&nbsp;Code</th><th>客户端</th><th>网页</th></tr></thead>
+            <tbody>
+              <tr><th>Codex</th><td class="yes">●</td><td class="yes">●</td><td class="yes">●</td><td class="soon">—</td></tr>
+              <tr><th>Claude&nbsp;Code</th><td class="yes">●</td><td class="yes">●</td><td class="yes">●</td><td class="soon">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="matrix-foot">// 每家、每个环境都能单独开关 · 纯网页端会话在云端，暂不支持</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 换肤 + PetDex -->
+  <section id="skins">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-tag">// 你的桌宠你做主</div>
+        <h2 class="sec-title">换个皮肤，或直接拖张图进来</h2>
+        <p class="sec-desc">官方内置几只，也能导入你自己的图片当桌宠——选一张 PNG / SVG，还能自动去掉纯色背景。</p>
+      </div>
+      <div class="skins">
+        <div class="skin-grid">
+          <div class="skin sel"><span class="tag off">官方</span>🐱</div>
+          <div class="skin"><span class="tag off">官方</span>🐤</div>
+          <div class="skin"><span class="tag off">官方</span>🫧</div>
+          <div class="skin"><span class="tag imp">已导入</span>🐸</div>
+          <div class="skin"><span class="tag imp">已导入</span>🦊</div>
+          <div class="skin" style="font-size:20px;color:var(--ink-3);font-family:var(--mono);text-align:center">＋<br>导入</div>
+        </div>
+        <div>
+          <h3 style="font-size:20px;margin:0 0 12px;letter-spacing:-0.01em;font-weight:800">一张图 → 一只桌宠</h3>
+          <p style="color:var(--ink-2);font-size:15px;margin:0 0 18px;line-height:1.6">
+            导入图片时自动抠掉纯色背景（黑底 / 白底抠成透明，复杂背景保持原样）。导入的皮肤能随时改名、删除；官方皮肤永远在。
+          </p>
+          <ul style="list-style:none;padding:0;margin:0;display:grid;gap:11px;font-size:15px">
+            <li>▸ <strong>PNG / WebP / SVG</strong> 都能导</li>
+            <li>▸ 一个「导入皮肤」按钮，自动识别图片还是皮肤包</li>
+            <li>▸ 抠图在本地跑，图片不上传任何服务器</li>
+          </ul>
+        </div>
+      </div>
+      <div class="petdex-box">
+        <span class="pd-ico">🎨</span>
+        <span class="pd-txt">
+          <strong>不够玩？还有几千只社区形象。</strong>
+          DeskPet 兼容 Codex 宠物格式——社区里几千只做好的桌宠，挑中一只点一下就装进你的 DeskPet。
+        </span>
+        <a class="btn small" href="gallery.html">逛形象库 →</a>
+      </div>
+
+      <!-- 几只样例，点「导入」直接 deskpet:// 唤起 App 安装 -->
+      <div class="pd-samples">
+        <div class="pd-sample-label">试试一键导入（需已安装 DeskPet）：</div>
+        <div class="pd-sample-row" id="pdSamples"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 隐私 -->
+  <section id="privacy">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="sec-tag">// 我们不碰你的东西</div>
+        <h2 class="sec-title">纯本地，越界的事一件都不做</h2>
+        <p class="sec-desc">它只读本机会话状态文件来判断「AI 停没停」，除此之外什么都不碰。设置、导入的形象、统计都留在你的机器上。</p>
+      </div>
+      <div class="privacy">
+        <div class="priv"><div class="k">网络</div><div class="v">从不联网</div></div>
+        <div class="priv"><div class="k">你的代码</div><div class="v">从不读取</div></div>
+        <div class="priv"><div class="k">系统权限</div><div class="v">零权限</div></div>
+        <div class="priv"><div class="k">账号</div><div class="v">无需账号</div></div>
+      </div>
+      <p class="matrix-foot">// 不要辅助功能 / AppleScript / 窗口聚焦 · 只在本机读取，只为提醒你</p>
+    </div>
+  </section>
+
+  <!-- 下载 -->
+  <section id="download">
+    <div class="wrap">
+      <div class="cta-box">
+        <h2>把它请到你的桌面上</h2>
+        <p>免费内测 · 仅 macOS（Apple Silicon）· 一次下载，安静常驻</p>
+        <button class="btn" id="dlBtnCta">下载 DeskPet for macOS</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <a class="brand" href="#top" style="font-size:14px"><span class="logo-mark"></span>桌宠 · DeskPet</a>
+    <a class="fl" href="#watch">监控</a>
+    <a class="fl" href="#skins">换肤</a>
+    <span class="foot-meta">MVP 0.3 · 帮你盯着 AI 干活的小伙伴 · 2026</span>
+  </div>
+</footer>
+
+<!-- 下载弹窗 -->
+<div class="modal" id="dlModal" role="dialog" aria-modal="true" aria-label="选择安装包">
+  <div class="modal-card">
+    <h3>选择安装包</h3>
+    <p class="msub">根据你的 Mac 下载最新版本。</p>
+    <a class="dl-opt" href="#">
+      <span class="os">🍎</span>
+      <span><span class="t">macOS · Apple Silicon</span><br><span class="m">M1 / M2 / M3 / M4 · DMG</span></span>
+      <span class="go">↓</span>
+    </a>
+    <a class="dl-opt" href="#" style="opacity:0.55; pointer-events:none">
+      <span class="os">🖥️</span>
+      <span><span class="t">macOS · Intel</span><br><span class="m">即将支持</span></span>
+      <span class="go">↓</span>
+    </a>
+    <a class="dl-opt" href="#" style="opacity:0.55; pointer-events:none">
+      <span class="os">🪟</span>
+      <span><span class="t">Windows</span><br><span class="m">路线图中</span></span>
+      <span class="go">↓</span>
+    </a>
+    <button class="modal-close" id="dlClose">关闭</button>
+  </div>
+</div>
+
+<script src="pet-anchors.js"></script>
+<script>
+  // 主题切换
+  (function(){
+    var btn=document.getElementById('themeBtn'), root=document.documentElement;
+    btn.addEventListener('click',function(){
+      var cur=root.getAttribute('data-theme');
+      if(!cur) cur=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+      root.setAttribute('data-theme', cur==='dark'?'light':'dark');
+    });
+  })();
+  // 下载弹窗
+  (function(){
+    var modal=document.getElementById('dlModal');
+    function open(){ modal.classList.add('open'); }
+    function close(){ modal.classList.remove('open'); }
+    ['dlBtnNav','dlBtnHero','dlBtnCta'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.addEventListener('click',open);
+    });
+    document.getElementById('dlClose').addEventListener('click',close);
+    modal.addEventListener('click',function(e){ if(e.target===modal) close(); });
+    document.addEventListener('keydown',function(e){ if(e.key==='Escape') close(); });
+  })();
+  // 形象库入口
+  (function(){
+    var el=document.getElementById('petdexLink');
+    if(el) el.addEventListener('click',function(e){ e.preventDefault();
+      document.getElementById('skins').scrollIntoView({behavior:'smooth'}); });
+  })();
+
+  // 从 PetDex 拉几只样例，渲染成「一键导入」卡片（点按钮 → deskpet:// 唤起 App 安装）
+  (function(){
+    var row = document.getElementById('pdSamples');
+    if(!row) return;
+    // 想优先展示的几只热门/原创样例 slug
+    var wanted = ['boba','wangcai','usagi','testbird','tiko'];
+    fetch('https://petdex.dev/api/manifest')
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var bySlug = {};
+        (d.pets||[]).forEach(function(p){ bySlug[p.slug]=p; });
+        var picks = wanted.map(function(s){ return bySlug[s]; }).filter(Boolean).slice(0,5);
+        if(!picks.length) picks = (d.pets||[]).slice(0,5);
+        picks.forEach(function(p){
+          var deep = 'deskpet://install?url=' + encodeURIComponent(p.zipUrl) +
+                     '&name=' + encodeURIComponent(p.displayName);
+          var card = document.createElement('div');
+          card.className = 'pd-sample';
+          card.innerHTML =
+            '<span class="pd-sample-thumb" style="background-image:url(\'' + p.spritesheetUrl + '\')"></span>' +
+            '<span class="pd-sample-name" title="' + p.displayName + '">' + p.displayName + '</span>' +
+            '<a class="pd-sample-btn" href="' + deep + '">导入</a>';
+          row.appendChild(card);
+        });
+      })
+      .catch(function(){
+        row.innerHTML = '<span style="font-size:13px;color:var(--ink-3)">形象库暂时连不上，可直接去 petdex.dev 逛。</span>';
+      });
+  })();
+
+  // v1.7：Hero 附身特效——火焰从头顶烧起 + 饰品环绕头部（常亮）
+  // 锚点由 pet-hero.png 的 alpha 通道预计算（pet-anchors.js，生成脚本见 effect-demos）
+  // 定稿参数(hero-attach.html 调参台选定)：特效=火焰+饰品 强度=42 大小=24 火焰覆盖=10% 常亮=是
+  (function(){
+    var A=window.PET_ANCHORS;
+    var stage=document.getElementById('heroStage');
+    var back=document.getElementById('heroFxBack');
+    var front=document.getElementById('heroFxFront');
+    var pet=document.getElementById('heroPet');
+    if(!A||!stage||!back||!front||!pet) return;
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var bctx=back.getContext('2d'), fctx=front.getContext('2d');
+
+    var POWER=42/50, SIZE=24, COVER=10;
+    var COLORS=['#ff6b5d','#ffc531','#16c79a','#4d8dff','#9b6cf0','#ff9f45','#2ec5d3'];
+    var FIRE_RAMP=['#fff3c9','#ffd75e','#ff9f45','#ff6b2c'];
+    var PAT={
+      star:['  1  ','  2  ','12321','  2  ','  1  '],
+      heart:[' 1 1 ','12321','12221',' 121 ','  1  '],
+      diamond:['  2  ',' 121 ','12321',' 131 ','  1  ']
+    };
+    function lighten(hex,a){var n=parseInt(hex.slice(1),16);return 'rgb('+Math.min(255,((n>>16)&255)+a)+','+Math.min(255,((n>>8)&255)+a)+','+Math.min(255,(n&255)+a)+')';}
+    function darken(hex,a){var n=parseInt(hex.slice(1),16);return 'rgb('+Math.max(0,((n>>16)&255)-a)+','+Math.max(0,((n>>8)&255)-a)+','+Math.max(0,(n&255)-a)+')';}
+
+    var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2),petBox={x:0,y:0,w:0,h:0};
+    function resize(){
+      var sr=stage.getBoundingClientRect(), pr=pet.getBoundingClientRect();
+      W=sr.width; H=sr.height;
+      petBox={x:pr.left-sr.left,y:pr.top-sr.top,w:pr.width,h:pr.height};
+      [back,front].forEach(function(c){ c.width=W*DPR; c.height=H*DPR;
+        c.style.width=W+'px'; c.style.height=H+'px'; });
+      bctx.setTransform(DPR,0,0,DPR,0,0); fctx.setTransform(DPR,0,0,DPR,0,0);
+    }
+    function ax(p){ return petBox.x+(p[0]+0.5)/A.gw*petBox.w; }
+    function ay(p){ return petBox.y+(p[1]+0.5)/A.gh*petBox.h; }
+    window.addEventListener('resize',resize);
+
+    /* 火焰只从顶部轮廓的前 COVER% 生成（10% ≈ 只烧头顶） */
+    var fireAnchors=A.top.filter(function(p){return p[1]<A.gh*COVER/100;});
+    if(!fireAnchors.length) fireAnchors=A.top.slice(0,20);
+
+    var live=[], MAX=400, t=0, DT=0.016;
+    function spawnFire(){
+      if(live.length>=MAX) return;
+      var p=fireAnchors[(Math.random()*fireAnchors.length)|0];
+      live.push({kind:'fire',x:ax(p)+(Math.random()*8-4),y:ay(p)+3,
+        vx:Math.random()*10-5,vy:-(34+Math.random()*55)*(SIZE/24),
+        age:0,life:0.7+Math.random()*0.85,sz:SIZE*(0.35+Math.random()*0.55),
+        wob:Math.random()*6.28});
+    }
+    function spawnPop(){
+      if(live.length>=MAX) return;
+      var p=A.body[(Math.random()*A.body.length)|0];
+      live.push({kind:'pop',x:ax(p),y:ay(p),age:0,life:1.3,
+        glyph:Math.random()<0.5?'heart':'star',
+        sz:SIZE*(0.6+Math.random()*0.5),color:COLORS[(Math.random()*COLORS.length)|0]});
+    }
+    var orbit=[];
+    for(var i=0;i<7;i++) orbit.push({a:i/7*Math.PI*2,glyph:['diamond','star','heart'][i%3],
+      color:COLORS[i%COLORS.length],sp:0.55+Math.random()*0.25});
+
+    function drawPattern(ctx,pat,x,y,size,pal,alpha){
+      var rows=pat.length,cols=pat[0].length,unit=size/rows,
+          ox=x-(cols*unit)/2, oy=y-(rows*unit)/2;
+      for(var r=0;r<rows;r++)for(var col=0;col<cols;col++){
+        var ch=pat[r][col]; if(ch===' ')continue;
+        ctx.globalAlpha=alpha;
+        ctx.fillStyle=pal[ch];
+        ctx.fillRect(Math.round(ox+col*unit),Math.round(oy+r*unit),Math.ceil(unit),Math.ceil(unit));
+      }
+      ctx.globalAlpha=1;
+    }
+
+    function loop(){
+      t+=DT; bctx.clearRect(0,0,W,H); fctx.clearRect(0,0,W,H);
+      var n=Math.round(POWER*9*Math.random()*2);
+      for(var s=0;s<n;s++) spawnFire();
+      if(Math.random()<POWER*0.045) spawnPop();
+
+      for(var i=live.length-1;i>=0;i--){
+        var p=live[i]; p.age+=DT;
+        if(p.age>=p.life){ live.splice(i,1); continue; }
+        var f=p.age/p.life;
+        if(p.kind==='fire'){
+          p.x+=p.vx*DT+Math.sin(p.age*9+p.wob)*0.55;
+          p.y+=p.vy*DT;
+          var sz=Math.max(2,Math.round(p.sz*(1-0.68*f)/3)*3);
+          /* 接近画布顶部时渐隐，避免火焰被边界硬裁出一条直线 */
+          var edgeFade=Math.min(1,Math.max(0,(p.y-8)/56));
+          bctx.save();
+          if(f<0.35){ bctx.shadowColor='#ffd75e'; bctx.shadowBlur=10; }
+          bctx.globalAlpha=(1-f)*0.9*edgeFade;
+          bctx.fillStyle=FIRE_RAMP[Math.min(3,(f*4)|0)];
+          var gx=Math.round(p.x/3)*3, gy=Math.round(p.y/3)*3;
+          bctx.fillRect(gx-sz/2,gy-sz/2,sz,sz);
+          bctx.restore();
+        } else {
+          var env=Math.sin(Math.PI*f); p.y-=8*DT;
+          var pal={'1':p.color,'2':lighten(p.color,70),'3':darken(p.color,55)};
+          drawPattern(fctx,PAT[p.glyph],p.x,p.y,p.sz*(0.5+0.5*env),pal,env);
+        }
+      }
+
+      /* 饰品环绕头部（常驻，带前后深度感） */
+      var hx=ax([A.head.cx,A.head.cy]), hy=ay([A.head.cx,A.head.cy]);
+      var rx=A.head.r/A.gw*petBox.w*1.55, ry=rx*0.32;
+      for(var o=0;o<orbit.length;o++){
+        var g=orbit[o]; g.a+=g.sp*DT;
+        var gx2=hx+Math.cos(g.a)*rx, gy2=hy+Math.sin(g.a)*ry-6*Math.sin(t*1.4+o);
+        var depth=0.62+0.38*Math.sin(g.a);
+        var pal2={'1':g.color,'2':lighten(g.color,70),'3':darken(g.color,55)};
+        drawPattern(fctx,PAT[g.glyph],gx2,gy2,SIZE*(0.5+0.35*depth),pal2,depth);
+      }
+      requestAnimationFrame(loop);
+    }
+    pet.addEventListener('load',resize);
+    resize(); requestAnimationFrame(loop);
+  })();
+</script>
+</body>
+</html>
