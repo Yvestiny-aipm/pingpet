@@ -159,6 +159,14 @@
     font-weight:700; padding:3px 6px; border-radius:6px; }
   .tag.off { background:color-mix(in srgb,var(--c4) 14%,var(--panel)); color:var(--c4); }
   .tag.imp { background:color-mix(in srgb,var(--c2) 16%,var(--panel)); color:#0f9b80; }
+  /* 社区形象弧形画廊 */
+  .pet-orbit-wrap { margin-top:34px; }
+  .pet-orbit { height:340px; overflow:hidden; cursor:grab; outline:none; touch-action:pan-y; }
+  .pet-orbit:active { cursor:grabbing; }
+  .pet-orbit:focus-visible { outline:2px solid var(--c4); outline-offset:4px; border-radius:12px; }
+  .pet-orbit canvas { display:block; }
+  .pet-orbit-hint { font-family:var(--mono); font-size:12px; color:var(--ink-3); margin-top:6px; text-align:center; }
+
   .petdex-box { border:1px solid var(--line); border-radius:16px; background:var(--soft);
     padding:18px 20px; margin-top:20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
   .petdex-box .pd-ico { font-size:26px; }
@@ -354,6 +362,11 @@
           </ul>
         </div>
       </div>
+      <!-- 社区形象弧形画廊（React Bits CircularGallery 移植版，拖拽/←→/自动巡游） -->
+      <div class="pet-orbit-wrap">
+        <div class="pet-orbit" id="petOrbit" tabindex="0" role="region" aria-label="社区形象滚动画廊，可拖拽或用左右方向键浏览"></div>
+        <div class="pet-orbit-hint">// 社区形象抢先看 · 拖一拖，或按 ← →</div>
+      </div>
       <div class="petdex-box">
         <span class="pd-ico">🎨</span>
         <span class="pd-txt">
@@ -436,6 +449,7 @@
 </div>
 
 <script src="pet-anchors.js"></script>
+<script src="pet-gallery.js" defer></script>
 <script>
   // 主题切换
   (function(){
