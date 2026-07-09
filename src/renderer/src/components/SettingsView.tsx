@@ -3,7 +3,6 @@ import { PET_SCALE_MAX, PET_SCALE_MIN } from '@shared/defaults'
 import { AGENT_ENVS } from '@shared/types'
 import type { AgentEnv, AgentEventKind, AgentSource, Settings, Snapshot } from '@shared/types'
 import { api } from '../api'
-import logoUrl from '../assets/logo.png'
 import { removeBackgroundFromDataUrl } from '../removeBackground'
 import PetSprite from './PetSprite'
 
@@ -196,24 +195,26 @@ export default function SettingsView(): JSX.Element {
 
   return (
     <div className="settings">
-      {/* 左侧导航 */}
+      {/* 左侧导航：悬浮图标方块（垂直居中）+ 左下角产品名 */}
       <nav className="settings-nav">
-        <div className="settings-brand">
-          <img className="settings-brand-logo" src={logoUrl} alt="" />
-          桌宠设置
+        <div className="settings-nav-tiles">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`settings-nav-item${tab === t.key ? ' is-active' : ''}`}
+              onClick={() => setTab(t.key)}
+              aria-label={t.label}
+            >
+              <span className="settings-nav-icon">{t.icon}</span>
+              <span className="settings-nav-chip">{t.label}</span>
+            </button>
+          ))}
         </div>
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            className={`settings-nav-item${tab === t.key ? ' is-active' : ''}`}
-            onClick={() => setTab(t.key)}
-          >
-            <span className="settings-nav-icon">{t.icon}</span>
-            {t.label}
-          </button>
-        ))}
-        <div className="settings-nav-foot">v{appVersion}</div>
+        <div className="settings-brandname">
+          PingPet
+          <span className="settings-nav-foot">v{appVersion}</span>
+        </div>
       </nav>
 
       {/* 右侧内容面板 */}

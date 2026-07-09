@@ -282,11 +282,11 @@ body[data-route='pet'] {
    ============================================================ */
 
 :root {
-  /* —— 底色（清新暖白，不发灰） —— */
-  --p-bg:        #fbfaf6;   /* 面板底 */
-  --p-nav:       #f2f0e9;   /* 左侧导航底 */
+  /* —— 底色（奶油米白，参照 BrandAppart 风格） —— */
+  --p-bg:        #f7f2e7;   /* 面板底：奶油色 */
+  --p-nav:       #f7f2e7;   /* 左侧导航与面板同底，无分隔 */
   --p-card:      #ffffff;   /* 卡片白 */
-  --p-line:      #e7e3d8;   /* 边框/描边 */
+  --p-line:      #e8e1d2;   /* 边框/描边 */
   --p-ink:       #2a2925;   /* 主文字（暖黑） */
   --p-ink-soft:  #7d7a70;   /* 次要文字 */
   --p-ink-faint: #a8a49a;   /* 更淡 */
@@ -310,78 +310,100 @@ body[data-route='settings'] {
 .settings {
   height: 100%;
   display: grid;
-  grid-template-columns: 190px 1fr;
+  grid-template-columns: 96px 1fr;
   overflow: hidden;
 }
 
-/* ---------- 左侧导航 ---------- */
+/* ---------- 左侧导航：悬浮小方块图标栏（垂直居中），左下角产品名 ---------- */
 .settings-nav {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 20px 14px;
+  justify-content: center;
+  align-items: center;
   background: var(--p-nav);
-  border-right: 2px solid var(--p-line);
+  overflow: visible;
+  z-index: 5;
 }
 
-.settings-brand {
+.settings-nav-tiles {
   display: flex;
-  align-items: center;
-  gap: 9px;
-  font-family: var(--p-mono);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--p-ink);
-  padding: 4px 8px 18px;
-}
-.settings-brand-logo {
-  width: 18px;
-  height: 18px;
-  flex: none;
-  border-radius: 5px;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .settings-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 11px;
-  border: 2px solid transparent;
-  border-radius: 8px;               /* 收小圆角，偏方 */
-  background: transparent;
+  position: relative;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--p-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
   color: var(--p-ink-soft);
-  font-family: inherit;
-  font-size: 13.5px;
-  font-weight: 500;
-  text-align: left;
   cursor: pointer;
-  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  box-shadow: 0 2px 8px rgba(46, 40, 24, 0.05);
+  transition: background 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
 }
 .settings-nav-item:hover {
-  background: rgba(0, 0, 0, 0.035);
-  color: var(--p-ink);
+  background: var(--p-card);
+  transform: scale(1.05);
 }
-/* 选中态：白底 + 硬边框 + 硬阴影（像素卡片感） */
 .settings-nav-item.is-active {
   background: var(--p-card);
   color: var(--p-ink);
-  font-weight: 700;
-  border-color: var(--p-ink);
-  box-shadow: var(--p-shadow);
+  box-shadow: 0 8px 20px rgba(46, 40, 24, 0.13);
 }
 .settings-nav-icon {
-  font-size: 15px;
+  font-size: 19px;
   line-height: 1;
 }
+/* 悬停/选中时在方块右侧浮出的小标签（参照 WORKS 胶囊） */
+.settings-nav-chip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  background: #eae3d4;
+  color: var(--p-ink);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 4px 9px;
+  border-radius: 7px;
+  box-shadow: 0 3px 8px rgba(46, 40, 24, 0.12);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  z-index: 6;
+}
+.settings-nav-item:hover .settings-nav-chip,
+.settings-nav-item.is-active .settings-nav-chip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* 左下角：产品名（按用户要求只放名字，不放 logo）+ 小版本号 */
+.settings-brandname {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--p-ink);
+  line-height: 1.15;
+}
 .settings-nav-foot {
-  margin-top: auto;
-  padding: 8px 10px 2px;
+  display: block;
   font-family: var(--p-mono);
-  font-size: 10.5px;
+  font-size: 9.5px;
+  font-weight: 400;
   color: var(--p-ink-faint);
   font-variant-numeric: tabular-nums;
+  margin-top: 2px;
 }
 
 /* ---------- 右侧面板 ---------- */
