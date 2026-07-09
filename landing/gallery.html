@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>形象库 · 桌宠 DeskPet</title>
 <meta name="description" content="从社区形象库挑一只桌宠，点一下直接装进你的 DeskPet。按类型、主题分类，几千只社区形象一键导入。" />
+<link rel="icon" type="image/png" href="logo.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <style>
   :root {
     color-scheme: light dark;
@@ -32,8 +34,7 @@
   .wrap { max-width:var(--maxw); margin:0 auto; padding:0 28px; }
   a { color:inherit; }
 
-  .logo-mark { width:22px; height:22px; flex:none; border-radius:6px; background:var(--ink); position:relative; }
-  .logo-mark::after { content:''; position:absolute; inset:6px 6px auto auto; width:7px; height:7px; border-radius:2px; background:var(--c3); }
+  .logo-mark { width:22px; height:22px; flex:none; border-radius:6px; background:url('logo.png') center/cover no-repeat; }
 
   header.nav { position:sticky; top:0; z-index:30;
     background:color-mix(in srgb, var(--paper) 82%, transparent); backdrop-filter:blur(10px);

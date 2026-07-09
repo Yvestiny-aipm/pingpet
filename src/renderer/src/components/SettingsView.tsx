@@ -3,6 +3,7 @@ import { PET_SCALE_MAX, PET_SCALE_MIN } from '@shared/defaults'
 import { AGENT_ENVS } from '@shared/types'
 import type { AgentEnv, AgentEventKind, AgentSource, Settings, Snapshot } from '@shared/types'
 import { api } from '../api'
+import logoUrl from '../assets/logo.png'
 import { removeBackgroundFromDataUrl } from '../removeBackground'
 import PetSprite from './PetSprite'
 
@@ -198,7 +199,7 @@ export default function SettingsView(): JSX.Element {
       {/* 左侧导航 */}
       <nav className="settings-nav">
         <div className="settings-brand">
-          <span className="settings-brand-dot" />
+          <img className="settings-brand-logo" src={logoUrl} alt="" />
           桌宠设置
         </div>
         {TABS.map((t) => (

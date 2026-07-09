@@ -8,6 +8,8 @@
 <meta property="og:title" content="桌宠 DeskPet · 帮你盯着 AI 干活的桌面小伙伴" />
 <meta property="og:description" content="任务一停就叫你回来，忙时绝不打扰。本地优先，无需账号。兼容 Codex 宠物格式，可从社区下载更多形象。" />
 <meta property="og:type" content="website" />
+<link rel="icon" type="image/png" href="logo.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -49,8 +51,7 @@
   .wrap { max-width:var(--maxw); margin:0 auto; padding:0 28px; }
   a { color:inherit; }
 
-  .logo-mark { width:22px; height:22px; flex:none; border-radius:6px; background:var(--ink); position:relative; }
-  .logo-mark::after { content:''; position:absolute; inset:6px 6px auto auto; width:7px; height:7px; border-radius:2px; background:var(--c3); }
+  .logo-mark { width:22px; height:22px; flex:none; border-radius:6px; background:url('logo.png') center/cover no-repeat; }
 
   header.nav { position:sticky; top:0; z-index:30;
     background:color-mix(in srgb, var(--paper) 82%, transparent); backdrop-filter:blur(10px); }

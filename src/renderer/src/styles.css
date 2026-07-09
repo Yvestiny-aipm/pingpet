@@ -335,16 +335,11 @@ body[data-route='settings'] {
   color: var(--p-ink);
   padding: 4px 8px 18px;
 }
-/* 品牌点做成像素方块（三色叠角，8-bit 感），非圆点 */
-.settings-brand-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 0;                 /* 方角 = 像素 */
-  background:
-    linear-gradient(135deg, var(--p-lemon) 0 50%, transparent 50%),
-    linear-gradient(-45deg, var(--p-coral) 0 50%, var(--p-sky) 50%);
-  box-shadow: 1.5px 1.5px 0 var(--p-ink);
-  image-rendering: pixelated;
+.settings-brand-logo {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 5px;
 }
 
 .settings-nav-item {
