@@ -166,6 +166,10 @@
   .pet-orbit:focus-visible { outline:2px solid var(--c4); outline-offset:4px; border-radius:12px; }
   .pet-orbit canvas { display:block; }
   .pet-orbit-hint { font-family:var(--mono); font-size:12px; color:var(--ink-3); margin-top:6px; text-align:center; }
+  .orbit-toggle { margin-left:14px; }
+  .orbit-toggle button { font-family:var(--mono); font-size:11px; padding:2px 9px; margin-left:5px;
+    border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--ink-2); cursor:pointer; }
+  .orbit-toggle button.on { background:var(--ink); color:var(--paper); border-color:var(--ink); }
 
   .petdex-box { border:1px solid var(--line); border-radius:16px; background:var(--soft);
     padding:18px 20px; margin-top:20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
@@ -365,7 +369,9 @@
       <!-- 社区形象弧形画廊（React Bits CircularGallery 移植版，拖拽/←→/自动巡游） -->
       <div class="pet-orbit-wrap">
         <div class="pet-orbit" id="petOrbit" tabindex="0" role="region" aria-label="社区形象滚动画廊，可拖拽或用左右方向键浏览"></div>
-        <div class="pet-orbit-hint">// 社区形象抢先看 · 拖一拖，或按 ← →</div>
+        <div class="pet-orbit-hint">// 社区形象抢先看 · 拖一拖，或按 ← →
+          <span class="orbit-toggle">底色：<button type="button" id="orbitBgCard">彩卡</button><button type="button" id="orbitBgNone">透明</button></span>
+        </div>
       </div>
       <div class="petdex-box">
         <span class="pd-ico">🎨</span>

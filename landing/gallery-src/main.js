@@ -6,6 +6,7 @@
 // 打包：node_modules/.pnpm/node_modules/.bin/esbuild landing/gallery-src/main.js --bundle --minify --format=iife --outfile=landing/pet-gallery.js
 import { Camera, Mesh, Plane, Program, Renderer, Texture, Transform } from 'ogl'
 import ITEMS from './items.js'
+import ITEMS_NOBG from './items-nobg.js'
 
 function lerp(p1, p2, t) {
   return p1 + (p2 - p1) * t
@@ -74,8 +75,30 @@ class Title {
   }
 }
 
+// 透明底模式：contain-fit（完整露出宠物不裁切）+ 用贴图自身 alpha，无卡片圆角
+const FRAG_NOBG = `
+  precision highp float;
+  uniform vec2 uImageSizes;
+  uniform vec2 uPlaneSizes;
+  uniform sampler2D tMap;
+  varying vec2 vUv;
+  void main() {
+    float pr = uPlaneSizes.x / uPlaneSizes.y;
+    float ir = uImageSizes.x / uImageSizes.y;
+    vec2 uv = vUv;
+    if (pr > ir) {
+      uv.x = (vUv.x - 0.5) * (pr / ir) + 0.5;
+    } else {
+      uv.y = (vUv.y - 0.5) * (ir / pr) + 0.5;
+    }
+    float inBox = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+    vec4 color = texture2D(tMap, uv);
+    gl_FragColor = vec4(color.rgb, color.a * inBox);
+  }
+`
+
 class Media {
-  constructor({ geometry, gl, image, index, length, scene, screen, text, viewport, bend, textColor, borderRadius, font }) {
+  constructor({ geometry, gl, image, index, length, scene, screen, text, viewport, bend, textColor, borderRadius, font, noBg }) {
     this.extra = 0
     this.geometry = geometry
     this.gl = gl
@@ -90,6 +113,7 @@ class Media {
     this.textColor = textColor
     this.borderRadius = borderRadius
     this.font = font
+    this.noBg = noBg
     this.createShader()
     this.createMesh()
     this.createTitle()
@@ -116,7 +140,7 @@ class Media {
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
       `,
-      fragment: `
+      fragment: this.noBg ? FRAG_NOBG : `
         precision highp float;
         uniform vec2 uImageSizes;
         uniform vec2 uPlaneSizes;
@@ -224,12 +248,13 @@ class Media {
 }
 
 class App {
-  constructor(container, { items, bend = 2.4, textColor = '#ffffff', borderRadius = 0.06, font = LABEL_FONT, scrollSpeed = 2, scrollEase = 0.06, autoSpeed = 0.022 } = {}) {
+  constructor(container, { items, bend = 2.4, textColor = '#ffffff', borderRadius = 0.06, font = LABEL_FONT, scrollSpeed = 2, scrollEase = 0.06, autoSpeed = 0.022, noBg = false } = {}) {
     this.container = container
     this.scrollSpeed = scrollSpeed
     this.scroll = { ease: scrollEase, current: 0, target: 0, last: 0 }
     this.autoSpeed = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : autoSpeed
     this.hover = false
+    this.noBg = noBg
     this.createRenderer()
     this.createCamera()
     this.createScene()
@@ -275,7 +300,8 @@ class App {
       bend,
       textColor,
       borderRadius,
-      font
+      font,
+      noBg: this.noBg
     }))
   }
   onTouchDown(e) {
@@ -366,20 +392,30 @@ class App {
 }
 
 // —— 自动挂载：容器进入视口附近才初始化（省 GPU），主题切换时用新标签色重建 ——
+// A/B 对比期：顶部「彩卡 / 透明」切换钮实时换底（定稿后删掉败者和这段切换逻辑）
 ;(function () {
   const el = document.getElementById('petOrbit')
   if (!el) return
   let app = null
+  let booted = false
+  let noBg = true // 本轮对比默认展示透明底
   function labelColor() {
     return (getComputedStyle(document.documentElement).getPropertyValue('--ink') || '#f5f4f2').trim()
   }
   function boot() {
     try {
-      app = new App(el, { items: ITEMS, bend: 2.4, textColor: labelColor() })
+      if (app) app.destroy()
+      app = new App(el, { items: noBg ? ITEMS_NOBG : ITEMS, bend: 2.4, textColor: labelColor(), noBg })
+      booted = true
     } catch (err) {
-      // WebGL 不可用（极老设备/被禁用）：整块隐藏，不留空洞
       el.closest('.pet-orbit-wrap').style.display = 'none'
     }
+  }
+  function syncBtns() {
+    const a = document.getElementById('orbitBgCard')
+    const b = document.getElementById('orbitBgNone')
+    if (a) a.classList.toggle('on', !noBg)
+    if (b) b.classList.toggle('on', noBg)
   }
   if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver((entries) => {
@@ -395,9 +431,12 @@ class App {
   const themeBtn = document.getElementById('themeBtn')
   if (themeBtn) {
     themeBtn.addEventListener('click', () => {
-      if (!app) return
-      app.destroy()
-      app = new App(el, { items: ITEMS, bend: 2.4, textColor: labelColor() })
+      if (booted) boot()
     })
   }
+  const btnCard = document.getElementById('orbitBgCard')
+  const btnNone = document.getElementById('orbitBgNone')
+  if (btnCard) btnCard.addEventListener('click', () => { noBg = false; syncBtns(); if (booted) boot() })
+  if (btnNone) btnNone.addEventListener('click', () => { noBg = true; syncBtns(); if (booted) boot() })
+  syncBtns()
 })()
