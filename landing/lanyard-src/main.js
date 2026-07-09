@@ -1,79 +1,76 @@
-// 官网页脚「开源工牌」吊牌。
-// 参考 React Bits <Lanyard />（R3F + Rapier 物理），此处为零依赖运行时移植：
-//  - three.js 渲染（RoomEnvironment 反射 + 物理材质 clearcoat），esbuild 打成经典脚本
-//  - Rapier 刚体绳 → 自写 Verlet 粒子绳（5 点 4 段 + 距离约束），观感一致、免 1.6MB wasm
-//  - 卡面贴图：正=作者 GitHub 名片 / 背=PingPet 项目卡（构建时 dataurl 内嵌）
-//  - 交互：拖拽甩卡（指针捕获）、快速点击跳 GitHub 主页、hover 抓手光标
-// 打包：esbuild main.js --bundle --minify --format=iife --loader:.jpg=dataurl --outfile=../lanyard.js
+// 官网页脚「开源工牌」吊牌 —— 完全复刻 React Bits <Lanyard />（老师站同款）。
+//  - 物理：同款 Rapier 引擎（wasm 内嵌），参数照搬原组件：gravity -40、linear/angularDamping 4、
+//    三段 rope joint + 球关节挂卡、拖拽切 kinematic 松手回 dynamic、angvel.y -= quat.y*0.25 缓回正。
+//    卡片是真刚体：可随意拖着翻转打圈（能看到背面项目卡），松手后重力+重阻尼自然回摆。
+//  - 模型：原版 card.glb（卡体/金属夹 clip/挂扣 clamp），卡面按原版管线把正背两图合成进贴图集
+//    （前=左半 UV 区，背=右半，cover 等比裁切）。
+//  - 织带：原版 lanyard.png（黑底 + 图标），repeat [-4,1]。
+//  - 渲染：three.js + 四条 Lightformer 灯带环境（清漆高光条纹的来源）。
+// 打包：esbuild main.js --bundle --minify --format=iife
+//       --loader:.jpg=dataurl --loader:.png=dataurl --loader:.glb=dataurl --outfile=../lanyard.js
 import * as THREE from 'three'
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import RAPIER from '@dimforge/rapier3d-compat'
+import CARD_GLB from './card.glb'
+import BAND_URL from './lanyard-band.png'
 import FRONT_URL from './lanyard-front.jpg'
 import BACK_URL from './lanyard-back.jpg'
 
 const GITHUB_URL = 'https://github.com/Yvestiny-aipm'
 
-const CARD_W = 1.9
-const CARD_H = 2.6
-const CARD_R = 0.14
-const CLIP_GAP = 0.16
-const ROPE_SEGS = 4          // 5 个粒子 4 段，对齐原版 fixed+j1+j2+j3+card
-const SEG_LEN = 0.52
-const GRAVITY = -22
-const BAND_W = 0.30
+// 原组件常量：卡模型 UV 集中 前面=左半 / 背面=右半
+const FRONT_UV_RECT = { x: 0, y: 0, w: 0.5, h: 0.755 }
+const BACK_UV_RECT = { x: 0.5, y: 0, w: 0.5, h: 0.757 }
+const SEG_LEN = 1
+const GRAVITY = -40
+const BAND_W = 0.3
+const MAX_SPEED = 50
+const MIN_SPEED = 0
 
-function roundedRectShape(w, h, r) {
-  const s = new THREE.Shape()
-  const x = -w / 2, y = -h / 2
-  s.moveTo(x + r, y)
-  s.lineTo(x + w - r, y)
-  s.quadraticCurveTo(x + w, y, x + w, y + r)
-  s.lineTo(x + w, y + h - r)
-  s.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-  s.lineTo(x + r, y + h)
-  s.quadraticCurveTo(x, y + h, x, y + h - r)
-  s.lineTo(x, y + r)
-  s.quadraticCurveTo(x, y, x + r, y)
-  return s
+function loadImage(url) {
+  return new Promise((res, rej) => {
+    const img = new Image()
+    img.onload = () => res(img)
+    img.onerror = rej
+    img.src = url
+  })
 }
 
-// ShapeGeometry 的 uv 是形状坐标系，重映射到 0..1 才能贴整张卡面
-function remapUVs(geo) {
-  geo.computeBoundingBox()
-  const bb = geo.boundingBox
-  const size = new THREE.Vector3().subVectors(bb.max, bb.min)
-  const pos = geo.attributes.position
-  const uv = new Float32Array(pos.count * 2)
-  for (let i = 0; i < pos.count; i++) {
-    uv[i * 2] = (pos.getX(i) - bb.min.x) / size.x
-    uv[i * 2 + 1] = (pos.getY(i) - bb.min.y) / size.y
+// 原组件 cardMap 合成：保留 glb 原贴图集（卡边框等），把两张卡面 cover 等比裁进各自半区
+function compositeAtlas(baseMap, frontImg, backImg) {
+  const baseImg = baseMap.image
+  const W = baseImg.width
+  const H = baseImg.height
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(baseImg, 0, 0, W, H)
+  const drawFitted = (img, rect) => {
+    const rx = rect.x * W, ry = rect.y * H, rw = rect.w * W, rh = rect.h * H
+    const scale = Math.max(rw / img.width, rh / img.height) // cover
+    const dw = img.width * scale, dh = img.height * scale
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(rx, ry, rw, rh)
+    ctx.clip()
+    ctx.drawImage(img, rx + (rw - dw) / 2, ry + (rh - dh) / 2, dw, dh)
+    ctx.restore()
   }
-  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
-}
-
-// 织带贴图：品牌紫底 + 重复 PINGPET 字样（运行时 canvas 生成，免外部素材）
-function makeBandTexture() {
-  const c = document.createElement('canvas')
-  c.width = 512
-  c.height = 128
-  const ctx = c.getContext('2d')
-  ctx.fillStyle = '#6b46d6'
-  ctx.fillRect(0, 0, 512, 128)
-  ctx.fillStyle = 'rgba(255,255,255,0.92)'
-  ctx.font = 'bold 58px ui-monospace, Menlo, monospace'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('PINGPET ✦', 24, 68)
-  ctx.fillText('PINGPET ✦', 24 + 512, 68)
-  const tex = new THREE.CanvasTexture(c)
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  drawFitted(frontImg, FRONT_UV_RECT)
+  drawFitted(backImg, BACK_UV_RECT)
+  const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
-  tex.anisotropy = 8
+  tex.flipY = baseMap.flipY
+  tex.anisotropy = 16
+  tex.needsUpdate = true
   return tex
 }
 
 class Lanyard {
-  constructor(container) {
+  constructor(container, assets) {
     this.container = container
+    this.assets = assets
     this.reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
@@ -82,39 +79,38 @@ class Lanyard {
     container.appendChild(this.renderer.domElement)
 
     this.scene = new THREE.Scene()
-    this.camera = new THREE.PerspectiveCamera(22, 1, 0.1, 100)
-    this.camera.position.set(0, 0, 15.5)
+    this.camera = new THREE.PerspectiveCamera(20, 1, 0.1, 100)
+    this.camera.position.set(0, 0, 24)
 
+    // 环境光照复刻原版：4 条 Lightformer 白色灯带（卡面高光条纹的来源）
     const pmrem = new THREE.PMREMGenerator(this.renderer)
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.06).texture
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.9))
-    const key = new THREE.DirectionalLight(0xffffff, 1.6)
-    key.position.set(2, 4, 6)
-    this.scene.add(key)
-
-    // —— Verlet 绳（P0 固定锚点 → P4 卡片挂点）——
-    this.anchor = new THREE.Vector3(0, 3.55, 0)
-    this.pts = []
-    this.prev = []
-    for (let i = 0; i <= ROPE_SEGS; i++) {
-      // 原版初始把绳摆开让它自然坠落甩起来（45° 比水平收敛更利落）；reduced-motion 直接竖直静置
-      const k = SEG_LEN * 0.707
-      const p = this.reduce
-        ? new THREE.Vector3(this.anchor.x, this.anchor.y - SEG_LEN * i, 0)
-        : new THREE.Vector3(this.anchor.x + k * i, this.anchor.y - k * i, 0)
-      this.pts.push(p)
-      this.prev.push(p.clone())
+    const envScene = new THREE.Scene()
+    const strip = (intensity, pos, rot, scale) => {
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color().setScalar(intensity), side: THREE.DoubleSide })
+      )
+      m.position.set(...pos)
+      m.rotation.set(...rot)
+      m.scale.set(...scale)
+      envScene.add(m)
     }
+    strip(2, [0, -1, 5], [0, 0, Math.PI / 3], [100, 0.1, 1])
+    strip(3, [-1, -1, 1], [0, 0, Math.PI / 3], [100, 0.1, 1])
+    strip(3, [1, 1, 1], [0, 0, Math.PI / 3], [100, 0.1, 1])
+    strip(10, [-10, 0, 14], [0, Math.PI / 2, Math.PI / 3], [100, 10, 1])
+    this.scene.environment = pmrem.fromScene(envScene, 0.75).texture
+    this.scene.add(new THREE.AmbientLight(0xffffff, Math.PI))
 
+    this.buildPhysics()
     this.buildCard()
     this.buildBand()
 
     this.dragging = false
+    this.dragTarget = new THREE.Vector3()
     this.dragOffset = new THREE.Vector3()
     this.downAt = 0
     this.downXY = [0, 0]
-    this.yRot = 0
-    this.yVel = 0
     this.raycaster = new THREE.Raycaster()
     this.pointer = new THREE.Vector2()
     this.bindEvents()
@@ -124,51 +120,90 @@ class Lanyard {
     this.ro.observe(container)
 
     this.clock = new THREE.Clock()
+    this.acc = 0
     this.renderer.setAnimationLoop(() => this.tick())
   }
 
-  buildCard() {
-    this.card = new THREE.Group()
-    const core = new THREE.Mesh(
-      new RoundedBoxGeometry(CARD_W, CARD_H, 0.06, 4, CARD_R),
-      new THREE.MeshPhysicalMaterial({ color: 0x16151b, metalness: 0.6, roughness: 0.5, clearcoat: 1, clearcoatRoughness: 0.2 })
-    )
-    const faceGeo = new THREE.ShapeGeometry(roundedRectShape(CARD_W - 0.04, CARD_H - 0.04, CARD_R), 12)
-    remapUVs(faceGeo)
-    const loader = new THREE.TextureLoader()
-    const mkFace = (url) => {
-      const map = loader.load(url)
-      map.colorSpace = THREE.SRGBColorSpace
-      map.anisotropy = 16
-      return new THREE.Mesh(faceGeo, new THREE.MeshPhysicalMaterial({
-        map, metalness: 0.35, roughness: 0.55, clearcoat: 1, clearcoatRoughness: 0.15
-      }))
+  buildPhysics() {
+    this.world = new RAPIER.World({ x: 0, y: GRAVITY, z: 0 })
+    this.world.timestep = 1 / 60
+    const dyn = (x, y) => {
+      const body = this.world.createRigidBody(
+        RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y, 0).setLinearDamping(4).setAngularDamping(4)
+      )
+      this.world.createCollider(RAPIER.ColliderDesc.ball(0.1), body)
+      return body
     }
-    const front = mkFace(FRONT_URL)
-    front.position.z = 0.035
-    const back = mkFace(BACK_URL)
-    back.rotation.y = Math.PI
-    back.position.z = -0.035
-    // 金属卡扣（对齐原版 clip/clamp 的观感）
-    const metal = new THREE.MeshPhysicalMaterial({ color: 0xd8d8de, metalness: 1, roughness: 0.28 })
-    const clamp = new THREE.Mesh(new RoundedBoxGeometry(0.62, 0.2, 0.09, 3, 0.045), metal)
-    clamp.position.y = CARD_H / 2 + 0.06
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.035, 10, 24), metal)
-    ring.position.y = CARD_H / 2 + 0.2
-    this.card.add(core, front, back, clamp, ring)
+    // 原版布局：fixed(0,4) + j1(0.5,4) + j2(1,4) + j3(1.5,4) + card(2,4)——绳水平摆放自然坠落入场；
+    // reduced-motion 直接竖直静置
+    this.bFixed = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, 4, 0))
+    if (this.reduce) {
+      this.j1 = dyn(0, 3)
+      this.j2 = dyn(0, 2)
+      this.j3 = dyn(0, 1)
+    } else {
+      this.j1 = dyn(0.5, 4)
+      this.j2 = dyn(1, 4)
+      this.j3 = dyn(1.5, 4)
+    }
+    const cardDesc = RAPIER.RigidBodyDesc.dynamic().setLinearDamping(4).setAngularDamping(4)
+    cardDesc.setTranslation(...(this.reduce ? [0, -0.5, 0] : [2, 4, 0]))
+    this.bCard = this.world.createRigidBody(cardDesc)
+    this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.8, 1.125, 0.01), this.bCard)
+    const O = { x: 0, y: 0, z: 0 }
+    this.world.createImpulseJoint(RAPIER.JointData.rope(SEG_LEN, O, O), this.bFixed, this.j1, true)
+    this.world.createImpulseJoint(RAPIER.JointData.rope(SEG_LEN, O, O), this.j1, this.j2, true)
+    this.world.createImpulseJoint(RAPIER.JointData.rope(SEG_LEN, O, O), this.j2, this.j3, true)
+    // 球关节：卡在本地 (0,1.5,0) 挂到 j3 —— 原版参数
+    this.world.createImpulseJoint(RAPIER.JointData.spherical(O, { x: 0, y: 1.5, z: 0 }), this.j3, this.bCard, true)
+    // 织带中段平滑用（原版 j1/j2 lerped）
+    this.lerp1 = new THREE.Vector3().copy(this.j1.translation())
+    this.lerp2 = new THREE.Vector3().copy(this.j2.translation())
+  }
+
+  buildCard() {
+    const { gltf, frontImg, backImg } = this.assets
+    const nodes = {}
+    const materials = {}
+    gltf.scene.traverse((o) => {
+      if (o.isMesh) nodes[o.name] = o
+      if (o.isMesh && o.material && o.material.name) materials[o.material.name] = o.material
+    })
+    // 原版卡面材质：合成贴图集 + 粗糙金属底 + 清漆层
+    const cardMesh = new THREE.Mesh(nodes.card.geometry, new THREE.MeshPhysicalMaterial({
+      map: compositeAtlas(materials.base.map, frontImg, backImg),
+      clearcoat: 1,
+      clearcoatRoughness: 0.15,
+      roughness: 0.9,
+      metalness: 0.8
+    }))
+    const metalClip = materials.metal.clone()
+    metalClip.roughness = 0.3
+    const clipMesh = new THREE.Mesh(nodes.clip.geometry, metalClip)
+    const clampMesh = new THREE.Mesh(nodes.clamp.geometry, materials.metal)
+    // 原版层级：group scale=2.25 position=[0,-1.2,-0.05]
+    const inner = new THREE.Group()
+    inner.add(cardMesh, clipMesh, clampMesh)
+    inner.scale.setScalar(2.25)
+    inner.position.set(0, -1.2, -0.05)
+    this.card = new THREE.Group()
+    this.card.add(inner)
     this.scene.add(this.card)
-    this.hitMeshes = [core, front, back]
+    this.hitMeshes = [cardMesh, clipMesh, clampMesh]
   }
 
   buildBand() {
-    this.bandTex = makeBandTexture()
-    this.bandSamples = 40
+    this.bandTex = new THREE.TextureLoader().load(BAND_URL)
+    this.bandTex.wrapS = this.bandTex.wrapT = THREE.RepeatWrapping
+    this.bandTex.colorSpace = THREE.SRGBColorSpace
+    this.bandTex.anisotropy = 8
+    this.bandSamples = 32
     const n = this.bandSamples + 1
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 2 * 3), 3))
     const uv = new Float32Array(n * 2 * 2)
     for (let i = 0; i < n; i++) {
-      const t = (i / this.bandSamples) * 3 // 沿带重复 3 次
+      const t = -(i / this.bandSamples) * 4 // 原版 meshline repeat [-4, 1]
       uv[(i * 2) * 2] = t
       uv[(i * 2) * 2 + 1] = 0
       uv[(i * 2 + 1) * 2] = t
@@ -182,11 +217,13 @@ class Lanyard {
     }
     geo.setIndex(idx)
     this.band = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-      map: this.bandTex, side: THREE.DoubleSide, toneMapped: false
+      map: this.bandTex, side: THREE.DoubleSide, toneMapped: false, transparent: true
     }))
     this.band.frustumCulled = false
     this.scene.add(this.band)
-    this.curve = new THREE.CatmullRomCurve3(this.pts, false, 'chordal')
+    // 原版曲线：j3 → j2.lerped → j1.lerped → fixed
+    this.curvePts = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]
+    this.curve = new THREE.CatmullRomCurve3(this.curvePts, false, 'chordal')
   }
 
   bindEvents() {
@@ -197,8 +234,11 @@ class Lanyard {
       this.raycaster.setFromCamera(this.pointer, this.camera)
       if (this.raycaster.intersectObjects(this.hitMeshes, false).length === 0) return
       const world = this.pointerToWorld(e)
+      const t = this.bCard.translation()
+      this.dragOffset.set(world.x - t.x, world.y - t.y, 0)
+      this.dragTarget.set(t.x, t.y, t.z)
       this.dragging = true
-      this.dragOffset.subVectors(this.pts[ROPE_SEGS], world)
+      this.bCard.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true)
       this.downAt = performance.now()
       this.downXY = [e.clientX, e.clientY]
       el.setPointerCapture(e.pointerId)
@@ -207,9 +247,7 @@ class Lanyard {
     el.addEventListener('pointermove', (e) => {
       if (this.dragging) {
         const world = this.pointerToWorld(e)
-        const target = world.add(this.dragOffset)
-        this.yVel += (target.x - this.pts[ROPE_SEGS].x) * 0.9 // 拖动带一点扭转的活气
-        this.pts[ROPE_SEGS].copy(target)
+        this.dragTarget.set(world.x - this.dragOffset.x, world.y - this.dragOffset.y, 0)
         return
       }
       this.setPointer(e)
@@ -219,6 +257,7 @@ class Lanyard {
     const up = (e) => {
       if (!this.dragging) return
       this.dragging = false
+      this.bCard.setBodyType(RAPIER.RigidBodyType.Dynamic, true)
       el.style.cursor = 'grab'
       const quick = performance.now() - this.downAt < 250 &&
         Math.hypot(e.clientX - this.downXY[0], e.clientY - this.downXY[1]) < 6
@@ -233,7 +272,7 @@ class Lanyard {
     this.pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
   }
 
-  // 指针射线与 z=0 平面求交（卡片活动平面）
+  // 指针射线与 z=0 平面求交（吊牌活动平面）
   pointerToWorld(e) {
     this.setPointer(e)
     this.raycaster.setFromCamera(this.pointer, this.camera)
@@ -242,56 +281,48 @@ class Lanyard {
     return new THREE.Vector3().copy(d).multiplyScalar(t).add(o)
   }
 
-  step(dt) {
-    const g = GRAVITY * dt * dt
-    for (let i = 1; i <= ROPE_SEGS; i++) {
-      if (this.dragging && i === ROPE_SEGS) continue // 拖拽时挂点由指针钉住
-      const p = this.pts[i], pr = this.prev[i]
-      const vx = (p.x - pr.x) * 0.985
-      const vy = (p.y - pr.y) * 0.985
-      pr.copy(p)
-      p.x += vx
-      p.y += vy + g
-    }
-    // 距离约束：P0 钉在锚点，逐段收敛
-    for (let k = 0; k < 6; k++) {
-      this.pts[0].copy(this.anchor)
-      for (let i = 0; i < ROPE_SEGS; i++) {
-        const a = this.pts[i], b = this.pts[i + 1]
-        const dx = b.x - a.x, dy = b.y - a.y
-        const dist = Math.hypot(dx, dy) || 1e-6
-        const diff = (dist - SEG_LEN) / dist
-        const lockA = i === 0
-        const lockB = this.dragging && i + 1 === ROPE_SEGS
-        const wA = lockA ? 0 : lockB ? 1 : 0.5
-        const wB = lockB ? 0 : lockA ? 1 : 0.5
-        a.x += dx * diff * wA
-        a.y += dy * diff * wA
-        b.x -= dx * diff * wB
-        b.y -= dy * diff * wB
-      }
-    }
-  }
-
   tick() {
     const dt = Math.min(this.clock.getDelta(), 1 / 30)
-    this.step(dt)
 
-    // 卡片跟随挂点：位置 + 沿末段方向下垂 + 扭转回弹（对齐原版 angvel.y 阻尼）
-    const tip = this.pts[ROPE_SEGS]
-    const dir = new THREE.Vector3().subVectors(tip, this.pts[ROPE_SEGS - 1]).normalize()
-    if (dir.lengthSq() < 0.5) dir.set(0, -1, 0)
-    const zRot = Math.atan2(dir.x, -dir.y)
-    this.yVel += (-this.yRot * 3 - this.yVel * 1.6) * dt * 4
-    this.yRot = THREE.MathUtils.clamp(this.yRot + this.yVel * dt, -0.7, 0.7)
-    this.card.position.set(
-      tip.x + dir.x * (CLIP_GAP + CARD_H / 2),
-      tip.y + dir.y * (CLIP_GAP + CARD_H / 2),
-      0
-    )
-    this.card.rotation.set(0, this.yRot, zRot)
+    // 固定步长推进 Rapier（最多补 3 步防螺旋）
+    this.acc += dt
+    let steps = 0
+    while (this.acc >= 1 / 60 && steps < 3) {
+      if (this.dragging) {
+        ;[this.bCard, this.j1, this.j2, this.j3].forEach((b) => b.wakeUp())
+        this.bCard.setNextKinematicTranslation({ x: this.dragTarget.x, y: this.dragTarget.y, z: 0 })
+      }
+      this.world.step()
+      // 原版软弹簧：angvel.y -= quat.y * 0.25 —— 缓慢转回正面，但完全不阻止用户翻面
+      if (!this.dragging) {
+        const q = this.bCard.rotation()
+        const av = this.bCard.angvel()
+        this.bCard.setAngvel({ x: av.x, y: av.y - q.y * 0.25, z: av.z }, true)
+      }
+      this.acc -= 1 / 60
+      steps++
+    }
+    if (steps === 3) this.acc = 0
 
-    // 织带条带：曲线取样，屏幕朝向展宽
+    // 卡片网格同步刚体位姿（真 3D 旋转，翻面可见背面）
+    const t = this.bCard.translation()
+    const q = this.bCard.rotation()
+    this.card.position.set(t.x, t.y, t.z)
+    this.card.quaternion.set(q.x, q.y, q.z, q.w)
+
+    // 织带：j1/j2 平滑插值（原版 lerped），曲线 j3 → j2 → j1 → fixed
+    for (const [lerped, body] of [[this.lerp1, this.j1], [this.lerp2, this.j2]]) {
+      const cur = body.translation()
+      const clamped = Math.max(0.1, Math.min(1, lerped.distanceTo(cur)))
+      lerped.lerp(new THREE.Vector3(cur.x, cur.y, cur.z), dt * (MIN_SPEED + clamped * (MAX_SPEED - MIN_SPEED)))
+    }
+    const j3t = this.j3.translation()
+    const ft = this.bFixed.translation()
+    this.curvePts[0].set(j3t.x, j3t.y, j3t.z)
+    this.curvePts[1].copy(this.lerp2)
+    this.curvePts[2].copy(this.lerp1)
+    this.curvePts[3].set(ft.x, ft.y, ft.z)
+
     const samples = this.curve.getPoints(this.bandSamples)
     const pos = this.band.geometry.attributes.position
     const toCam = new THREE.Vector3()
@@ -300,8 +331,8 @@ class Lanyard {
     for (let i = 0; i <= this.bandSamples; i++) {
       const p = samples[i]
       const pNext = samples[Math.min(i + 1, this.bandSamples)]
-      const pPrev2 = samples[Math.max(i - 1, 0)]
-      tan.subVectors(pNext, pPrev2).normalize()
+      const pPrev = samples[Math.max(i - 1, 0)]
+      tan.subVectors(pNext, pPrev).normalize()
       toCam.subVectors(this.camera.position, p).normalize()
       side.crossVectors(tan, toCam).normalize().multiplyScalar(BAND_W / 2)
       pos.setXYZ(i * 2, p.x - side.x, p.y - side.y, p.z - side.z)
@@ -325,11 +356,14 @@ class Lanyard {
   const el = document.getElementById('lanyardStage')
   if (!el) return
   function boot() {
-    try {
-      new Lanyard(el)
-    } catch (err) {
-      el.closest('#opensource') && (el.style.display = 'none')
-    }
+    Promise.all([
+      RAPIER.init(),
+      new GLTFLoader().loadAsync(CARD_GLB),
+      loadImage(FRONT_URL),
+      loadImage(BACK_URL)
+    ])
+      .then(([, gltf, frontImg, backImg]) => new Lanyard(el, { gltf, frontImg, backImg }))
+      .catch(() => { el.style.display = 'none' })
   }
   if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver((entries) => {

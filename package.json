@@ -19,6 +19,7 @@
     "electron-store": "^8.2.0"
   },
   "devDependencies": {
+    "@dimforge/rapier3d-compat": "^0.19.3",
     "@electron/osx-sign": "^1.3.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
