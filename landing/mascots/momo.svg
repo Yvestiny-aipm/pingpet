@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140" role="img" aria-label="墨墨">
-  <path d="M22 98 C22 62 42 42 70 42 C98 42 118 62 118 98 C118 110 111 119 104 114 C100 123 91 126 87 119 C81 127 59 127 53 119 C49 126 40 123 36 114 C29 119 22 110 22 98 Z" fill="#7C8DB0" stroke="#66779B" stroke-width="3" stroke-linejoin="round"/>
-  <ellipse cx="52" cy="62" rx="14" ry="8" fill="#98A7C6" opacity=".7" transform="rotate(-20 52 62)"/>
-  <g fill="#F4F7FF"><circle cx="52" cy="88" r="5"/><circle cx="88" cy="88" r="5"/></g>
-  <path d="M66 102 q4 4 8 0" stroke="#2E3A52" stroke-width="2.6" stroke-linecap="round" fill="none"/>
-  <ellipse cx="40" cy="100" rx="6.5" ry="4" fill="#9FB0D0" opacity=".9"/>
-  <ellipse cx="100" cy="100" rx="6.5" ry="4" fill="#9FB0D0" opacity=".9"/>
-</svg>
