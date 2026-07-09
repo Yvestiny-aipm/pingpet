@@ -1,7 +1,8 @@
-// 吊牌背景：GridScan 网格扫描（React Bits 移植，去 React/face-api/陀螺仪，保留鼠标视差 + 后期）。
-// 按用户要求的两处定制：
-//  1) 配色换品牌紫（线=暗紫、扫描光=亮紫），匹配全站黑色主题
-//  2) 扫描光只保留「由近到远」单方向（scanDirection=forward，不用组件默认的 pingpong 来回扫）
+// 吊牌背景：GridScan 网格扫描（React Bits 移植，去 React/face-api/陀螺仪）。
+// 按用户要求定制：
+//  1) 配色品牌紫（线=浅紫、扫描光=亮紫），匹配全站黑色主题
+//  2) 扫描光只保留「由近到远」单方向（scanDirection=forward），每 3 秒发射一趟
+//  3) 背景完全静止：无鼠标视差、无线条抖动、无噪点闪烁——唯一会动的只有扫描光
 // 着色器原样照搬；bloom/色散用 postprocessing（和原组件一致）。
 import * as THREE from 'three'
 import { BloomEffect, ChromaticAberrationEffect, EffectComposer, EffectPass, RenderPass } from 'postprocessing'
@@ -208,45 +209,23 @@ function srgbColor(hex) {
   return new THREE.Color(hex).convertSRGBToLinear()
 }
 
-function smoothDampVec2(current, target, currentVelocity, smoothTime, dt) {
-  smoothTime = Math.max(0.0001, smoothTime)
-  const omega = 2 / smoothTime
-  const x = omega * dt
-  const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x)
-  const change = current.clone().sub(target)
-  const originalTo = target.clone()
-  const tgt = current.clone().sub(change)
-  const temp = currentVelocity.clone().addScaledVector(change, omega).multiplyScalar(dt)
-  currentVelocity.sub(temp.clone().multiplyScalar(omega))
-  currentVelocity.multiplyScalar(exp)
-  const out = tgt.add(change.add(temp).multiplyScalar(exp))
-  const origMinusCurrent = originalTo.clone().sub(current)
-  const outMinusOrig = out.clone().sub(originalTo)
-  if (origMinusCurrent.dot(outMinusOrig) > 0) {
-    out.copy(originalTo)
-    currentVelocity.set(0, 0)
-  }
-  return out
-}
-
-// 用法：mountGridScan(挂载容器, 鼠标事件容器)。配色/参数按官网品牌定制，其余对齐原组件 usage 示例。
-export function mountGridScan(container, pointerHost) {
+// 用法：mountGridScan(挂载容器)。配色/参数按官网品牌定制，其余对齐原组件 usage 示例。
+export function mountGridScan(container) {
   const OPTS = {
-    sensitivity: 0.55,
     lineThickness: 1,
-    linesColor: '#352a52',   // 暗紫网格线（对齐 usage 示例的暗度 #2F293A，色相偏品牌紫）
+    linesColor: '#5a4a92',   // 浅紫网格线（用户要求调浅；实际渲染经线性转换会偏暗，故取值偏亮）
     scanColor: '#c9a2ff',    // 品牌紫（亮）——扫描光
     scanOpacity: 0.4,
     gridScale: 0.1,
-    lineJitter: 0.1,
+    lineJitter: 0,           // 背景静止：线条不抖
     bloomIntensity: 0.6,
     chromaticAberration: 0.002,
-    noiseIntensity: 0.01,
+    noiseIntensity: 0,       // 背景静止：无噪点闪烁
     scanGlow: 0.5,
     scanSoftness: 2,
     scanPhaseTaper: 0.9,
     scanDuration: 2.0,
-    scanDelay: 2.0,
+    scanDelay: 1.0,          // 2s 扫描 + 1s 间歇 = 每 3 秒发射一趟
     scanDirection: 0 // forward：只保留「由近到远」，按需求砍掉回程
   }
 
@@ -307,26 +286,7 @@ export function mountGridScan(container, pointerHost) {
   effectPass.renderToScreen = true
   composer.addPass(effectPass)
 
-  // 鼠标视差（挂在外层舞台上，吊牌画布在上层也能冒泡进来）
-  const s = THREE.MathUtils.clamp(OPTS.sensitivity, 0, 1)
-  const skewScale = THREE.MathUtils.lerp(0.06, 0.2, s)
-  const smoothTime = THREE.MathUtils.lerp(0.45, 0.12, s)
-  const yBoost = THREE.MathUtils.lerp(1.2, 1.6, s)
-  const lookTarget = new THREE.Vector2(0, 0)
-  const lookCurrent = new THREE.Vector2(0, 0)
-  const lookVel = new THREE.Vector2(0, 0)
-  let leaveTimer = null
-  pointerHost.addEventListener('mousemove', (e) => {
-    if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null }
-    const rect = pointerHost.getBoundingClientRect()
-    lookTarget.set(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -(((e.clientY - rect.top) / rect.height) * 2 - 1)
-    )
-  })
-  pointerHost.addEventListener('mouseleave', () => {
-    leaveTimer = window.setTimeout(() => lookTarget.set(0, 0), 250)
-  })
+  // 背景完全静止：不接鼠标视差，uSkew/uTilt/uYaw 恒为 0
 
   const onResize = () => {
     renderer.setSize(container.clientWidth, container.clientHeight)
@@ -340,8 +300,6 @@ export function mountGridScan(container, pointerHost) {
     const now = performance.now()
     const dt = Math.max(0, Math.min(0.1, (now - last) / 1000))
     last = now
-    lookCurrent.copy(smoothDampVec2(lookCurrent, lookTarget, lookVel, smoothTime, dt))
-    uniforms.uSkew.value.set(lookCurrent.x * skewScale, -lookCurrent.y * yBoost * skewScale)
     uniforms.iTime.value = now / 1000
     renderer.clear(true, true, true)
     composer.render(dt)

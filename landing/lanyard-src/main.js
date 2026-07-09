@@ -358,10 +358,10 @@ class Lanyard {
   const el = document.getElementById('lanyardStage')
   if (!el) return
   function boot() {
-    // 背景网格扫描（独立画布，垫在吊牌下层；鼠标视差监听挂在整个舞台上）
+    // 背景网格扫描（独立画布，垫在吊牌下层；完全静态，只有扫描光在动）
     const grid = document.getElementById('gridScan')
     if (grid) {
-      try { mountGridScan(grid, el) } catch (err) { grid.style.display = 'none' }
+      try { mountGridScan(grid) } catch (err) { grid.style.display = 'none' }
     }
     Promise.all([
       RAPIER.init(),

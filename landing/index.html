@@ -153,11 +153,8 @@
   #opensource { padding:0; }
   .lanyard-stage { position:relative; width:100%; height:100vh; }
   .lanyard-stage > canvas { position:absolute; inset:0; width:100%; height:100%; display:block; z-index:1; }
-  /* 背景网格扫描：顶部与吊绳最上端持平，宽高参照老师站的背景区比例 */
-  .gridscan { position:absolute; top:0; left:50%; transform:translateX(-50%);
-    width:min(62%, 900px); height:58%; z-index:0; pointer-events:none;
-    -webkit-mask-image:radial-gradient(90% 115% at 50% 0%, #000 58%, transparent 96%);
-    mask-image:radial-gradient(90% 115% at 50% 0%, #000 58%, transparent 96%); }
+  /* 背景网格扫描：铺满舞台——左右=屏幕边界，上=吊绳顶端，下=页脚上缘 */
+  .gridscan { position:absolute; inset:0; z-index:0; pointer-events:none; }
   .gridscan canvas { width:100%; height:100%; display:block; }
 
   /* 社区形象弧形画廊 */
