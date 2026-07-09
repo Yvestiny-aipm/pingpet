@@ -11,6 +11,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import RAPIER from '@dimforge/rapier3d-compat'
+import { mountGridScan } from './gridscan.js'
 import CARD_GLB from './card.glb'
 import BAND_URL from './lanyard-band.png'
 import FRONT_URL from './lanyard-front.jpg'
@@ -357,6 +358,11 @@ class Lanyard {
   const el = document.getElementById('lanyardStage')
   if (!el) return
   function boot() {
+    // 背景网格扫描（独立画布，垫在吊牌下层；鼠标视差监听挂在整个舞台上）
+    const grid = document.getElementById('gridScan')
+    if (grid) {
+      try { mountGridScan(grid, el) } catch (err) { grid.style.display = 'none' }
+    }
     Promise.all([
       RAPIER.init(),
       new GLTFLoader().loadAsync(CARD_GLB),

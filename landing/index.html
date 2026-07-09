@@ -152,7 +152,13 @@
   /* 开源工牌吊牌：整屏透明舞台，唯一边界=屏幕（对齐 React Bits lanyard-wrapper 100vh） */
   #opensource { padding:0; }
   .lanyard-stage { position:relative; width:100%; height:100vh; }
-  .lanyard-stage canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .lanyard-stage > canvas { position:absolute; inset:0; width:100%; height:100%; display:block; z-index:1; }
+  /* 背景网格扫描：顶部与吊绳最上端持平，宽高参照老师站的背景区比例 */
+  .gridscan { position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:min(62%, 900px); height:58%; z-index:0; pointer-events:none;
+    -webkit-mask-image:radial-gradient(90% 115% at 50% 0%, #000 58%, transparent 96%);
+    mask-image:radial-gradient(90% 115% at 50% 0%, #000 58%, transparent 96%); }
+  .gridscan canvas { width:100%; height:100%; display:block; }
 
   /* 社区形象弧形画廊 */
   .pet-orbit-wrap { margin-top:8px; }
@@ -409,7 +415,9 @@
 
   <!-- 开源工牌（React Bits Lanyard 移植：three.js + Verlet 绳）：整屏舞台只挂一张大吊牌，同老师站 -->
   <section id="opensource">
-    <div class="lanyard-stage" id="lanyardStage" aria-label="可拖拽的 GitHub 工牌：Yvestiny-aipm，点击打开主页"></div>
+    <div class="lanyard-stage" id="lanyardStage" aria-label="可拖拽的 GitHub 工牌：Yvestiny-aipm，点击打开主页">
+      <div class="gridscan" id="gridScan" aria-hidden="true"></div>
+    </div>
   </section>
 
 </main>
