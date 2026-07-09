@@ -236,7 +236,7 @@ class Media {
   onResize({ screen, viewport } = {}) {
     if (screen) this.screen = screen
     if (viewport) this.viewport = viewport
-    this.scale = this.screen.height / 1500
+    this.scale = this.screen.height / 1320
     this.plane.scale.y = (this.viewport.height * (900 * this.scale)) / this.screen.height
     this.plane.scale.x = (this.viewport.width * (700 * this.scale)) / this.screen.width
     this.plane.program.uniforms.uPlaneSizes.value = [this.plane.scale.x, this.plane.scale.y]
@@ -280,6 +280,8 @@ class App {
   }
   createScene() {
     this.scene = new Transform()
+    // 内容在画布内整体上提（世界单位），压掉顶部空白，把富余留给下方标签
+    this.scene.position.y = 1.3
   }
   createGeometry() {
     this.planeGeometry = new Plane(this.gl, { heightSegments: 50, widthSegments: 100 })
