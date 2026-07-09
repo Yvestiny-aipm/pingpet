@@ -23,9 +23,10 @@
 </script>
 <style>
   :root {
-    color-scheme: light dark;
-    --paper: #ffffff; --panel: #ffffff; --soft: #f6f6f4; --line: #ececea;
-    --ink: #17161a; --ink-2: #6b6a72; --ink-3: #a4a3ab;
+    /* 全站只保留黑色主题 */
+    color-scheme: dark;
+    --paper: #131217; --panel: #1a191f; --soft: #1e1d24; --line: #2c2b33;
+    --ink: #f5f4f2; --ink-2: #a9a8b2; --ink-3: #6f6e78;
     /* 底部小人的柔和彩色 */
     --c1: #ff6b5d; --c2: #16c79a; --c3: #ffc531; --c4: #4d8dff;
     --c5: #9b6cf0; --c6: #ff9f45; --c7: #2ec5d3;
@@ -34,14 +35,6 @@
     --mono: ui-monospace, "SF Mono", "Menlo", "DejaVu Sans Mono", monospace;
     --maxw: 1080px;
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --paper:#131217;--panel:#1a191f;--soft:#1e1d24;--line:#2c2b33;
-      --ink:#f5f4f2;--ink-2:#a9a8b2;--ink-3:#6f6e78; }
-  }
-  :root[data-theme="dark"] { --paper:#131217;--panel:#1a191f;--soft:#1e1d24;--line:#2c2b33;
-    --ink:#f5f4f2;--ink-2:#a9a8b2;--ink-3:#6f6e78; }
-  :root[data-theme="light"] { --paper:#ffffff;--panel:#ffffff;--soft:#f6f6f4;--line:#ececea;
-    --ink:#17161a;--ink-2:#6b6a72;--ink-3:#a4a3ab; }
 
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -62,9 +55,6 @@
   .nav-links a, .nav-links button.linklike { font-size:14px; color:var(--ink-2); text-decoration:none;
     padding:8px 12px; border-radius:9px; background:none; border:none; font-family:inherit; cursor:pointer; }
   .nav-links a:hover, .nav-links button.linklike:hover { background:var(--soft); color:var(--ink); }
-  .theme-btn { font-size:13px; border:1px solid var(--line); background:var(--panel);
-    color:var(--ink-2); border-radius:9px; padding:7px 11px; cursor:pointer; }
-  .theme-btn:hover { color:var(--ink); }
 
   .btn { display:inline-flex; align-items:center; gap:9px; font-weight:700; font-size:15px;
     padding:13px 24px; border:none; border-radius:999px; background:var(--ink); color:var(--paper);
@@ -171,10 +161,6 @@
   .pet-orbit:focus-visible { outline:2px solid var(--c4); outline-offset:4px; border-radius:12px; }
   .pet-orbit canvas { display:block; }
   .pet-orbit-hint { font-family:var(--mono); font-size:12px; color:var(--ink-3); margin-top:6px; text-align:center; }
-  .orbit-toggle { margin-left:14px; }
-  .orbit-toggle button { font-family:var(--mono); font-size:11px; padding:2px 9px; margin-left:5px;
-    border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--ink-2); cursor:pointer; }
-  .orbit-toggle button.on { background:var(--ink); color:var(--paper); border-color:var(--ink); }
 
   .petdex-box { border:1px solid var(--line); border-radius:16px; background:var(--soft);
     padding:18px 20px; margin-top:20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
@@ -253,7 +239,6 @@
       <a href="#watch">监控</a>
       <a href="#skins">换肤</a>
       <a href="gallery.html">形象库</a>
-      <button class="theme-btn" id="themeBtn">◐ 主题</button>
       <button class="btn pill-sm" id="dlBtnNav">下载</button>
     </nav>
   </div>
@@ -374,9 +359,7 @@
       <!-- 社区形象弧形画廊（React Bits CircularGallery 移植版，拖拽/←→/自动巡游） -->
       <div class="pet-orbit-wrap">
         <div class="pet-orbit" id="petOrbit" tabindex="0" role="region" aria-label="社区形象滚动画廊，可拖拽或用左右方向键浏览"></div>
-        <div class="pet-orbit-hint">// 社区形象抢先看 · 拖一拖，或按 ← →
-          <span class="orbit-toggle">底色：<button type="button" id="orbitBgCard">彩卡</button><button type="button" id="orbitBgNone">透明</button></span>
-        </div>
+        <div class="pet-orbit-hint">// 社区形象抢先看 · 拖一拖，或按 ← →</div>
       </div>
       <div class="petdex-box">
         <span class="pd-ico">🎨</span>
@@ -468,15 +451,6 @@
 <script src="pet-gallery.js" defer></script>
 <script src="lanyard.js" defer></script>
 <script>
-  // 主题切换
-  (function(){
-    var btn=document.getElementById('themeBtn'), root=document.documentElement;
-    btn.addEventListener('click',function(){
-      var cur=root.getAttribute('data-theme');
-      if(!cur) cur=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
-      root.setAttribute('data-theme', cur==='dark'?'light':'dark');
-    });
-  })();
   // 下载弹窗
   (function(){
     var modal=document.getElementById('dlModal');

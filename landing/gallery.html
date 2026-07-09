@@ -9,23 +9,16 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <style>
   :root {
-    color-scheme: light dark;
-    --paper: #ffffff; --panel: #ffffff; --soft: #f6f6f4; --line: #ececea;
-    --ink: #17161a; --ink-2: #6b6a72; --ink-3: #a4a3ab;
+    /* 全站只保留黑色主题 */
+    color-scheme: dark;
+    --paper: #131217; --panel: #1a191f; --soft: #1e1d24; --line: #2c2b33;
+    --ink: #f5f4f2; --ink-2: #a9a8b2; --ink-3: #6f6e78;
     --c3: #ffc531; --c4: #4d8dff;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
             "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     --mono: ui-monospace, "SF Mono", "Menlo", "DejaVu Sans Mono", monospace;
     --maxw: 1200px;
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --paper:#131217;--panel:#1a191f;--soft:#1e1d24;--line:#2c2b33;
-      --ink:#f5f4f2;--ink-2:#a9a8b2;--ink-3:#6f6e78; }
-  }
-  :root[data-theme="dark"] { --paper:#131217;--panel:#1a191f;--soft:#1e1d24;--line:#2c2b33;
-    --ink:#f5f4f2;--ink-2:#a9a8b2;--ink-3:#6f6e78; }
-  :root[data-theme="light"] { --paper:#ffffff;--panel:#ffffff;--soft:#f6f6f4;--line:#ececea;
-    --ink:#17161a;--ink-2:#6b6a72;--ink-3:#a4a3ab; }
 
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -45,8 +38,6 @@
   .nav-links { margin-left:auto; display:flex; align-items:center; gap:4px; }
   .nav-links a { font-size:14px; color:var(--ink-2); text-decoration:none; padding:8px 12px; border-radius:9px; }
   .nav-links a:hover { background:var(--soft); color:var(--ink); }
-  .theme-btn { font-size:13px; border:1px solid var(--line); background:var(--panel);
-    color:var(--ink-2); border-radius:9px; padding:7px 11px; cursor:pointer; }
 
   .head { padding:36px 0 8px; }
   .head h1 { font-weight:800; font-size:clamp(28px,4.2vw,42px); letter-spacing:-0.03em; margin:0 0 10px; }
@@ -120,7 +111,6 @@
     <nav class="nav-links">
       <a href="index.html">首页</a>
       <a href="index.html#watch">监控</a>
-      <button class="theme-btn" id="themeBtn">◐ 主题</button>
       <a href="index.html#download" style="font-weight:700;color:var(--ink)">下载</a>
     </nav>
   </div>
@@ -164,15 +154,6 @@
 </footer>
 
 <script>
-  // 主题切换
-  (function(){
-    var btn=document.getElementById('themeBtn'), root=document.documentElement;
-    btn.addEventListener('click',function(){
-      var cur=root.getAttribute('data-theme');
-      if(!cur) cur=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
-      root.setAttribute('data-theme', cur==='dark'?'light':'dark');
-    });
-  })();
 
   // ---- 标签定义 ----
   // 类型标签:精确,来自 API 的 kind

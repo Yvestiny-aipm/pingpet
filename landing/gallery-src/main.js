@@ -5,7 +5,6 @@
 //  3) 标签颜色跟随亮暗主题，主题切换时整体重建
 // 打包：node_modules/.pnpm/node_modules/.bin/esbuild landing/gallery-src/main.js --bundle --minify --format=iife --outfile=landing/pet-gallery.js
 import { Camera, Mesh, Plane, Program, Renderer, Texture, Transform } from 'ogl'
-import ITEMS from './items.js'
 import ITEMS_NOBG from './items-nobg.js'
 
 function lerp(p1, p2, t) {
@@ -393,31 +392,17 @@ class App {
   }
 }
 
-// —— 自动挂载：容器进入视口附近才初始化（省 GPU），主题切换时用新标签色重建 ——
-// A/B 对比期：顶部「彩卡 / 透明」切换钮实时换底（定稿后删掉败者和这段切换逻辑）
+// —— 自动挂载：容器进入视口附近才初始化（省 GPU）——
+// 定稿：只保留透明底模式（彩卡模式已淘汰移除），全站纯黑主题、标签固定亮色
 ;(function () {
   const el = document.getElementById('petOrbit')
   if (!el) return
-  let app = null
-  let booted = false
-  let noBg = true // 本轮对比默认展示透明底
-  function labelColor() {
-    return (getComputedStyle(document.documentElement).getPropertyValue('--ink') || '#f5f4f2').trim()
-  }
   function boot() {
     try {
-      if (app) app.destroy()
-      app = new App(el, { items: noBg ? ITEMS_NOBG : ITEMS, bend: 2.4, textColor: labelColor(), noBg })
-      booted = true
+      new App(el, { items: ITEMS_NOBG, bend: 2.4, textColor: '#f5f4f2', noBg: true })
     } catch (err) {
       el.closest('.pet-orbit-wrap').style.display = 'none'
     }
-  }
-  function syncBtns() {
-    const a = document.getElementById('orbitBgCard')
-    const b = document.getElementById('orbitBgNone')
-    if (a) a.classList.toggle('on', !noBg)
-    if (b) b.classList.toggle('on', noBg)
   }
   if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver((entries) => {
@@ -430,15 +415,4 @@ class App {
   } else {
     boot()
   }
-  const themeBtn = document.getElementById('themeBtn')
-  if (themeBtn) {
-    themeBtn.addEventListener('click', () => {
-      if (booted) boot()
-    })
-  }
-  const btnCard = document.getElementById('orbitBgCard')
-  const btnNone = document.getElementById('orbitBgNone')
-  if (btnCard) btnCard.addEventListener('click', () => { noBg = false; syncBtns(); if (booted) boot() })
-  if (btnNone) btnNone.addEventListener('click', () => { noBg = true; syncBtns(); if (booted) boot() })
-  syncBtns()
 })()

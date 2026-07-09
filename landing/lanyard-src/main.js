@@ -23,7 +23,7 @@ const FRONT_UV_RECT = { x: 0, y: 0, w: 0.5, h: 0.755 }
 const BACK_UV_RECT = { x: 0.5, y: 0, w: 0.5, h: 0.757 }
 const SEG_LEN = 1
 const GRAVITY = -40
-const BAND_W = 0.3
+const BAND_W = 0.27
 const MAX_SPEED = 50
 const MIN_SPEED = 0
 
@@ -79,8 +79,9 @@ class Lanyard {
     container.appendChild(this.renderer.domElement)
 
     this.scene = new THREE.Scene()
+    // 相机贴近：对齐老师站比例（卡占屏高约四成、锚点在屏外上方、可见绳段短）
     this.camera = new THREE.PerspectiveCamera(20, 1, 0.1, 100)
-    this.camera.position.set(0, 0, 24)
+    this.camera.position.set(0, 0, 15.5)
 
     // 环境光照复刻原版：4 条 Lightformer 白色灯带（卡面高光条纹的来源）
     const pmrem = new THREE.PMREMGenerator(this.renderer)
