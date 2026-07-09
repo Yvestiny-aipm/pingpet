@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>形象库 · 桌宠 PingPet</title>
+<meta name="description" content="从社区形象库挑一只桌宠，点一下直接装进你的 PingPet。按类型、主题分类，几千只社区形象一键导入。" />
+<link rel="icon" type="image/png" href="logo.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<style>
+  :root {
+    /* 全站只保留黑色主题 */
+    color-scheme: dark;
+    --paper: #131217; --panel: #1a191f; --soft: #1e1d24; --line: #2c2b33;
+    --ink: #f5f4f2; --ink-2: #a9a8b2; --ink-3: #6f6e78;
+    --c3: #ffc531; --c4: #4d8dff;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Menlo", "DejaVu Sans Mono", monospace;
+    --maxw: 1200px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans);
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:var(--maxw); margin:0 auto; padding:0 28px; }
+  a { color:inherit; }
+
+  .logo-mark { width:22px; height:22px; flex:none; border-radius:6px; background:url('logo.png') center/cover no-repeat; }
+
+  header.nav { position:sticky; top:0; z-index:30;
+    background:color-mix(in srgb, var(--paper) 82%, transparent); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line); }
+  .nav-inner { display:flex; align-items:center; gap:14px; height:66px; }
+  .brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:16px;
+    letter-spacing:-0.02em; text-decoration:none; color:var(--ink); }
+  .nav-links { margin-left:auto; display:flex; align-items:center; gap:4px; }
+  .nav-links a { font-size:14px; color:var(--ink-2); text-decoration:none; padding:8px 12px; border-radius:9px; }
+  .nav-links a:hover { background:var(--soft); color:var(--ink); }
+
+  .head { padding:36px 0 8px; }
+  .head h1 { font-weight:800; font-size:clamp(28px,4.2vw,42px); letter-spacing:-0.03em; margin:0 0 10px; }
+  .head p { font-size:15.5px; color:var(--ink-2); margin:0; max-width:54ch; }
+  .head .hint { font-family:var(--mono); font-size:12.5px; color:var(--ink-3); margin-top:10px; }
+
+  /* 左栏 + 右网格 布局 */
+  .layout { display:grid; grid-template-columns:200px 1fr; gap:28px; padding:20px 0 40px; align-items:start; }
+
+  /* 左侧固定标签栏 */
+  .sidebar { position:sticky; top:90px; display:flex; flex-direction:column; gap:20px; }
+  .side-group-title { font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:0.06em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 8px 8px; }
+  .side-list { display:flex; flex-direction:column; gap:3px; }
+  .side-item { display:flex; align-items:center; gap:9px; width:100%; padding:8px 11px; border:none;
+    border-radius:9px; background:none; color:var(--ink-2); font-family:inherit; font-size:14px;
+    text-align:left; cursor:pointer; transition:background 0.12s ease, color 0.12s ease; }
+  .side-item:hover { background:var(--soft); color:var(--ink); }
+  .side-item.on { background:var(--ink); color:var(--paper); font-weight:700; }
+  .side-item .emoji { font-size:15px; line-height:1; width:18px; text-align:center; }
+  .side-item .n { margin-left:auto; font-family:var(--mono); font-size:11px; opacity:0.7; }
+
+  /* 右侧内容 */
+  .content { min-width:0; }
+  .search { width:100%; padding:12px 16px; border:1px solid var(--line); border-radius:12px;
+    background:var(--panel); color:var(--ink); font-family:inherit; font-size:14px; outline:none; margin-bottom:18px; }
+  .search:focus { border-color:var(--c4); }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:16px; }
+  .card { border:1px solid var(--line); border-radius:18px; background:var(--panel); padding:16px 12px 14px;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    transition:transform 0.14s ease, box-shadow 0.14s ease; }
+  .card:hover { transform:translateY(-3px); box-shadow:0 16px 34px -18px rgba(0,0,0,0.3); }
+  .thumb { width:92px; height:92px; border-radius:14px; background:var(--soft);
+    background-repeat:no-repeat; background-size:800% 900%; background-position:0 0;
+    image-rendering:pixelated; margin-bottom:8px; }
+  .kindtag { font-family:var(--mono); font-size:9px; color:var(--ink-3); text-transform:uppercase; letter-spacing:0.04em; }
+  .name { font-size:14px; font-weight:700; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .author { font-family:var(--mono); font-size:10px; color:var(--ink-3); margin-bottom:10px; }
+  .import { margin-top:auto; width:100%; padding:9px; border:none; border-radius:999px;
+    background:var(--ink); color:var(--paper); font-family:inherit; font-size:13px; font-weight:700;
+    cursor:pointer; text-decoration:none; text-align:center; transition:opacity 0.12s ease; }
+  .import:hover { opacity:0.9; }
+
+  .status { text-align:center; padding:50px 0; color:var(--ink-3); font-family:var(--mono); font-size:13px; }
+  .more { display:block; margin:24px auto 40px; padding:12px 28px; border:1px solid var(--line);
+    border-radius:999px; background:var(--panel); color:var(--ink); font-family:inherit; font-size:14px;
+    font-weight:700; cursor:pointer; }
+  .more:hover { border-color:var(--ink); }
+  .more[hidden] { display:none; }
+
+  footer { border-top:1px solid var(--line); padding:26px 0 40px; }
+  .foot-inner { display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    font-family:var(--mono); font-size:12.5px; color:var(--ink-3); }
+
+  /* 移动端:侧栏变横排 */
+  @media (max-width:800px){
+    .layout { grid-template-columns:1fr; gap:16px; }
+    .sidebar { position:static; flex-direction:row; flex-wrap:wrap; gap:14px; }
+    .side-list { flex-direction:row; flex-wrap:wrap; }
+    .side-item { width:auto; }
+    .side-item .n { margin-left:5px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="index.html"><span class="logo-mark"></span>桌宠 · PingPet</a>
+    <nav class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="index.html#watch">监控</a>
+      <a href="index.html#download" style="font-weight:700;color:var(--ink)">下载</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap head">
+    <h1>形象库</h1>
+    <p>从社区里挑一只桌宠，点「导入」直接装进你的 PingPet——不用跳去别处、不用敲命令。</p>
+    <p class="hint" id="totalHint">// 正在连接形象库…</p>
+  </div>
+
+  <div class="wrap layout">
+    <!-- 左侧标签栏 -->
+    <aside class="sidebar">
+      <div>
+        <div class="side-group-title">按类型</div>
+        <div class="side-list" id="kindList"></div>
+      </div>
+      <div>
+        <div class="side-group-title">按主题</div>
+        <div class="side-list" id="themeList"></div>
+      </div>
+    </aside>
+
+    <!-- 右侧内容 -->
+    <div class="content">
+      <input class="search" id="search" type="text" placeholder="搜名字…" />
+      <div class="grid" id="grid"></div>
+      <div class="status" id="status">正在加载…</div>
+      <button class="more" id="more" hidden>加载更多</button>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap foot-inner">
+    <span>桌宠 · PingPet · 形象来自 PetDex 社区</span>
+    <span style="margin-left:auto"><a href="https://petdex.dev" target="_blank" rel="noreferrer" style="color:var(--ink-3)">petdex.dev ↗</a></span>
+  </div>
+</footer>
+
+<script>
+
+  // ---- 标签定义 ----
+  // 类型标签:精确,来自 API 的 kind
+  var KINDS = [
+    { key:'all', emoji:'✦', label:'全部' },
+    { key:'character', emoji:'🎭', label:'角色' },
+    { key:'creature', emoji:'🐾', label:'生物' },
+    { key:'object', emoji:'📦', label:'物件' }
+  ];
+  // 主题标签:靠名字关键词匹配(大致分类,数量够多的才留)
+  var THEMES = [
+    { key:'cat',    emoji:'🐱', label:'猫',     kw:['cat','kitty','kitten','neko','猫','喵'] },
+    { key:'dog',    emoji:'🐶', label:'狗',     kw:['dog','puppy','corgi','shiba','犬','狗'] },
+    { key:'bear',   emoji:'🐻', label:'熊猫',   kw:['bear','panda','熊'] },
+    { key:'bird',   emoji:'🐦', label:'鸟',     kw:['bird','duck','penguin','chick','owl','鸟','鸡','鸭','企鹅'] },
+    { key:'rabbit', emoji:'🐰', label:'兔',     kw:['rabbit','bunny','usagi','兔'] },
+    { key:'fox',    emoji:'🦊', label:'狐狼',   kw:['fox','wolf','狐','狼'] },
+    { key:'dragon', emoji:'🐉', label:'龙·神话', kw:['dragon','phoenix','龙','凤','神'] },
+    { key:'robot',  emoji:'🤖', label:'机器人',  kw:['robot','mecha','bot','android','机甲','机器'] },
+    { key:'food',   emoji:'🍡', label:'食物',   kw:['boba','tea','cake','mochi','sushi','bread','coffee','奶茶','茶','糕','饭'] },
+    { key:'anime',  emoji:'✨', label:'动漫角色', kw:['chan','kun','san','sama','anime','娘'] },
+    { key:'ghost',  emoji:'👾', label:'幽灵·怪', kw:['ghost','slime','blob','monster','鬼','怪'] }
+  ];
+
+  var ALL = [];
+  var activeKind = 'all';       // 当前选中的类型
+  var activeTheme = null;       // 当前选中的主题(null=不限)
+  var search = '';
+  var shown = 0, BATCH = 48;
+
+  var grid = document.getElementById('grid');
+  var statusEl = document.getElementById('status');
+  var moreBtn = document.getElementById('more');
+
+  function nameOf(p){ return ((p.displayName||'') + ' ' + (p.slug||'')).toLowerCase(); }
+  function matchTheme(p, theme){ var n = nameOf(p); return theme.kw.some(function(k){ return n.indexOf(k) >= 0; }); }
+
+  function filtered(){
+    return ALL.filter(function(p){
+      if (activeKind !== 'all' && p.kind !== activeKind) return false;
+      if (activeTheme && !matchTheme(p, activeTheme)) return false;
+      if (search && nameOf(p).indexOf(search) < 0) return false;
+      return true;
+    });
+  }
+
+  function makeCard(p){
+    var deep = 'deskpet://install?url=' + encodeURIComponent(p.zipUrl) +
+               '&name=' + encodeURIComponent(p.displayName || p.slug);
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="thumb" data-bg="' + p.spritesheetUrl + '"></div>' +
+      '<div class="kindtag">' + (p.kind||'') + '</div>' +
+      '<div class="name" title="' + (p.displayName||p.slug) + '">' + (p.displayName||p.slug) + '</div>' +
+      '<div class="author">' + (p.submittedBy ? 'by ' + p.submittedBy : '&nbsp;') + '</div>' +
+      '<a class="import" href="' + deep + '">＋ 导入</a>';
+    return card;
+  }
+
+  // 缩略图懒加载：只在滚动到快看见时才下载那张 2MB 大图（PetDex 图床不支持缩图）
+  var thumbObserver = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (!entry.isIntersecting) return;
+      var el = entry.target;
+      var bg = el.getAttribute('data-bg');
+      if (bg) { el.style.backgroundImage = "url('" + bg + "')"; el.removeAttribute('data-bg'); }
+      thumbObserver.unobserve(el);
+    });
+  }, { rootMargin: '400px' }); // 提前 400px 开始加载，滚到时已就绪
+
+  function render(reset){
+    if (reset) { grid.innerHTML=''; shown=0; }
+    var list = filtered();
+    var next = list.slice(shown, shown + BATCH);
+    next.forEach(function(p){
+      var card = makeCard(p);
+      grid.appendChild(card);
+      var thumb = card.querySelector('.thumb');
+      if (thumb) thumbObserver.observe(thumb);
+    });
+    shown += next.length;
+    statusEl.textContent = list.length ? ('显示 ' + shown + ' / ' + list.length + ' 只') : '没有匹配的形象，换个标签试试';
+    moreBtn.hidden = shown >= list.length;
+  }
+
+  function buildSidebar(){
+    // 类型
+    var kindCounts = { all: ALL.length };
+    KINDS.forEach(function(k){ if (k.key!=='all') kindCounts[k.key] = ALL.filter(function(p){return p.kind===k.key;}).length; });
+    var kindBox = document.getElementById('kindList');
+    kindBox.innerHTML = '';
+    KINDS.forEach(function(k){
+      var b = document.createElement('button');
+      b.className = 'side-item' + (k.key===activeKind && !activeTheme ? ' on' : '');
+      b.innerHTML = '<span class="emoji">'+k.emoji+'</span>'+k.label+'<span class="n">'+(kindCounts[k.key]||0)+'</span>';
+      b.addEventListener('click', function(){
+        activeKind = k.key; activeTheme = null;
+        refreshSidebarActive(); render(true);
+      });
+      kindBox.appendChild(b);
+    });
+    // 主题(算数量,只显示 >0 的)
+    var themeBox = document.getElementById('themeList');
+    themeBox.innerHTML = '';
+    THEMES.forEach(function(t){
+      var count = ALL.filter(function(p){ return matchTheme(p, t); }).length;
+      if (count === 0) return;
+      var b = document.createElement('button');
+      b.className = 'side-item' + (activeTheme && activeTheme.key===t.key ? ' on' : '');
+      b.dataset.theme = t.key;
+      b.innerHTML = '<span class="emoji">'+t.emoji+'</span>'+t.label+'<span class="n">'+count+'</span>';
+      b.addEventListener('click', function(){
+        // 主题独立筛选;点主题时类型回到"全部"(否则叠加太窄)
+        activeTheme = t; activeKind = 'all';
+        refreshSidebarActive(); render(true);
+      });
+      themeBox.appendChild(b);
+    });
+  }
+
+  function refreshSidebarActive(){
+    document.querySelectorAll('#kindList .side-item').forEach(function(b, i){
+      b.classList.toggle('on', KINDS[i].key===activeKind && !activeTheme);
+    });
+    document.querySelectorAll('#themeList .side-item').forEach(function(b){
+      b.classList.toggle('on', activeTheme && b.dataset.theme===activeTheme.key);
+    });
+  }
+
+  // 搜索
+  var searchEl = document.getElementById('search');
+  searchEl.addEventListener('input', function(){ search = searchEl.value.trim().toLowerCase(); render(true); });
+  // 加载更多 + 滚动
+  moreBtn.addEventListener('click', function(){ render(false); });
+  window.addEventListener('scroll', function(){
+    if (moreBtn.hidden) return;
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) render(false);
+  });
+
+  // 拉全量
+  fetch('https://petdex.dev/api/manifest')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      ALL = (d.pets||[]).filter(function(p){ return p.slug && p.spritesheetUrl && p.zipUrl; });
+      document.getElementById('totalHint').textContent =
+        '// 共 ' + (d.total||ALL.length) + ' 只，还在增长 · 主题标签按名字大致归类，仅供快速缩小范围';
+      buildSidebar();
+      render(true);
+    })
+    .catch(function(){
+      statusEl.innerHTML = '暂时连不上形象库。你也可以直接去 <a href="https://petdex.dev" target="_blank">petdex.dev</a> 逛。';
+    });
+</script>
+</body>
+</html>
