@@ -222,7 +222,7 @@ export function mountGridScan(container) {
     scanSoftness: 2,
     scanPhaseTaper: 0.9,
     scanDuration: 2.0,
-    scanDelay: 4.0,          // 2s 扫描 + 4s 间歇 = 每 6 秒发射一趟
+    scanDelay: 3.0,          // 2s 扫描 + 3s 静默 = 每 5 秒发射一趟
     scanDirection: 0 // forward：只保留「由近到远」，按需求砍掉回程
   }
 
