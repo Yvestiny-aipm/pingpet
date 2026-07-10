@@ -30,11 +30,13 @@ import type {
 } from '@shared/types'
 import { IPC } from '@shared/types'
 import {
+  AGENT_AI_BUBBLE_MS,
   AGENT_TERMINAL_BUBBLE_MS,
   AGENT_TERMINAL_COALESCE_MS,
   AGENT_THINKING_STATE_MS
 } from '@shared/defaults'
 import {
+  buildAgentBubbleHead,
   buildAgentBubbleText,
   BUBBLE_DURATION_MS,
   BUBBLE_JITTER,
@@ -43,6 +45,7 @@ import {
   IDLE_BUBBLE_LINES
 } from './config'
 import { AgentMonitor } from './agent/monitor'
+import { summarizeAgentStop, testAiSummary } from './ai/summarize'
 import { getSettings, patchSettings } from './store'
 import { clampToWorkArea, createPetWindow, createSettingsWindow, defaultPetPosition } from './windows'
 import { createTray, refreshTrayMenu } from './tray'
@@ -290,7 +293,7 @@ function handleAgentEvent(event: AgentMonitorEvent): void {
   // 停下来了：进合并缓冲，短窗口内的多个终态一次性弹（防炸屏）
   pendingTerminals.push(event)
   if (!terminalFlushTimer) {
-    terminalFlushTimer = setTimeout(flushTerminalBubbles, AGENT_TERMINAL_COALESCE_MS)
+    terminalFlushTimer = setTimeout(() => void flushTerminalBubbles(), AGENT_TERMINAL_COALESCE_MS)
   }
   // 诊断信息变了，实时刷新设置页
   broadcastSnapshot()
@@ -300,7 +303,7 @@ function handleAgentEvent(event: AgentMonitorEvent): void {
 let pendingTerminals: AgentMonitorEvent[] = []
 let terminalFlushTimer: ReturnType<typeof setTimeout> | null = null
 
-function flushTerminalBubbles(): void {
+async function flushTerminalBubbles(): Promise<void> {
   terminalFlushTimer = null
   const batch = pendingTerminals
   pendingTerminals = []
@@ -313,7 +316,12 @@ function flushTerminalBubbles(): void {
 
   if (batch.length === 1) {
     const e = batch[0]
-    sendBubble(buildAgentBubbleText(e), agentKindToPetState(e.kind), AGENT_TERMINAL_BUBBLE_MS, sound)
+    // v0.5 AI 总结（可选）：读会话末尾生成一句人话细节，拼在规则首行下面。
+    // 关着 / 没配 Key / 失败 / 超时都返回 null → 原样回落纯规则文案，提醒永不缺席。
+    const ai = await summarizeAgentStop(e, getSettings())
+    const text = ai ? `${buildAgentBubbleHead(e)}\n${ai}` : buildAgentBubbleText(e)
+    const durationMs = ai ? AGENT_AI_BUBBLE_MS : AGENT_TERMINAL_BUBBLE_MS
+    sendBubble(text, agentKindToPetState(e.kind), durationMs, sound)
     return
   }
 
@@ -757,6 +765,12 @@ function registerIpc(): void {
       },
       false
     )
+  })
+
+  // v0.5：设置台「测试连接」——用当前 AI 设置对样例文本发一次真实请求，验证 Key/模型可用
+  ipcMain.handle(IPC.TestAiSummary, (event) => {
+    requireTrustedSender(event)
+    return testAiSummary(getSettings())
   })
 }
 

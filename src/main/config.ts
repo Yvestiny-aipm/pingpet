@@ -43,20 +43,32 @@ const STOP_REASON_PHRASE: Record<AgentStopReason, string> = {
   interrupted: '输出被中断了 ⛔'
 }
 
-/**
- * 为一条终态 Agent 事件生成气泡文案：明确说出是哪个 Agent、因为什么停的。
- * reason 缺省时按 kind 兜底，保证老数据也有合理文案。
- */
-export function buildAgentBubbleText(event: AgentMonitorEvent): string {
-  const who = SOURCE_NAME[event.source]
-  const reason: AgentStopReason =
+/** reason 缺省时按 kind 兜底，保证老数据也有合理文案 */
+function effectiveReason(event: AgentMonitorEvent): AgentStopReason {
+  return (
     event.reason ??
     (event.kind === 'failed'
       ? 'error'
       : event.kind === 'needs_attention'
         ? 'needs_input'
         : 'completed')
-  const head = `${who} ${STOP_REASON_PHRASE[reason]}`
+  )
+}
+
+/**
+ * v0.5：气泡首行（来源 + 停止原因短语）。这一行来自显式信号 / 规则分类，可信；
+ * AI 总结只替换第二行细节，不改动这行的事实性结论。
+ */
+export function buildAgentBubbleHead(event: AgentMonitorEvent): string {
+  return `${SOURCE_NAME[event.source]} ${STOP_REASON_PHRASE[effectiveReason(event)]}`
+}
+
+/**
+ * 为一条终态 Agent 事件生成气泡文案：明确说出是哪个 Agent、因为什么停的。
+ */
+export function buildAgentBubbleText(event: AgentMonitorEvent): string {
+  const head = buildAgentBubbleHead(event)
+  const reason = effectiveReason(event)
   // error / interrupted 若摘到了具体原因，补一句让用户知道是什么导致的
   const detail = event.detail?.trim()
   if (detail && (reason === 'error' || reason === 'interrupted' || reason === 'needs_input')) {

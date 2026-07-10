@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import { PET_SCALE_MAX, PET_SCALE_MIN } from '@shared/defaults'
 import { AGENT_ENVS } from '@shared/types'
-import type { AgentEnv, AgentEventKind, AgentSource, Settings, Snapshot } from '@shared/types'
+import type {
+  AgentEnv,
+  AgentEventKind,
+  AgentSource,
+  AiTestResult,
+  Settings,
+  Snapshot
+} from '@shared/types'
 import { api } from '../api'
 import { removeBackgroundFromDataUrl } from '../removeBackground'
 import PetSprite from './PetSprite'
@@ -45,12 +52,13 @@ function formatTime(ms: number | null): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-type TabKey = 'pet' | 'bubble' | 'agent' | 'about'
+type TabKey = 'pet' | 'bubble' | 'agent' | 'ai' | 'about'
 
 const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
   { key: 'pet', label: '桌宠', icon: '🐾' },
   { key: 'bubble', label: '气泡', icon: '💬' },
   { key: 'agent', label: 'Agent', icon: '🛰️' },
+  { key: 'ai', label: 'AI 总结', icon: '✨' },
   { key: 'about', label: '关于', icon: 'ℹ️' }
 ]
 
@@ -65,6 +73,9 @@ export default function SettingsView(): JSX.Element {
   const [renameDraft, setRenameDraft] = useState('')
   // v0.3.2：左侧导航当前选中的分组
   const [tab, setTab] = useState<TabKey>('pet')
+  // v0.5：AI 总结「测试连接」的进行中 / 结果
+  const [aiTestBusy, setAiTestBusy] = useState(false)
+  const [aiTestResult, setAiTestResult] = useState<AiTestResult | null>(null)
 
   useEffect(() => {
     let disposed = false
@@ -192,6 +203,17 @@ export default function SettingsView(): JSX.Element {
   }
 
   const selectedPet = pets.find((p) => p.id === settings.selectedPetId) ?? pets[0]
+
+  // v0.5：AI 总结「测试连接」——主进程用当前设置发一次真实请求
+  const handleTestAi = (): void => {
+    setAiTestBusy(true)
+    setAiTestResult(null)
+    void api
+      .testAiSummary()
+      .then(setAiTestResult)
+      .catch((e) => setAiTestResult({ ok: false, error: String(e) }))
+      .finally(() => setAiTestBusy(false))
+  }
 
   return (
     <div className="settings">
@@ -513,6 +535,144 @@ export default function SettingsView(): JSX.Element {
                 </div>
               </div>
             )}
+          </>
+        )}
+
+        {tab === 'ai' && (
+          <>
+            <header className="panel-head">
+              <h2>AI 总结</h2>
+              <p>任务停下时，让大模型读会话末尾，用一句人话告诉你发生了什么。</p>
+            </header>
+
+            <div className="field-card">
+              <label className="field-row">
+                <span className="field-label">启用 AI 总结</span>
+                <input
+                  type="checkbox"
+                  className="switch"
+                  checked={settings.aiSummaryEnabled}
+                  onChange={(e) => {
+                    setAiTestResult(null)
+                    patch({ aiSummaryEnabled: e.target.checked })
+                  }}
+                />
+              </label>
+
+              {settings.aiSummaryEnabled && (
+                <>
+                  <label className="field-row">
+                    <span className="field-label">模型服务</span>
+                    <select
+                      value={settings.aiProvider}
+                      onChange={(e) => {
+                        setAiTestResult(null)
+                        patch({ aiProvider: e.target.value as Settings['aiProvider'] })
+                      }}
+                    >
+                      <option value="anthropic">Anthropic（Claude）</option>
+                      <option value="openai">OpenAI 兼容接口</option>
+                    </select>
+                  </label>
+
+                  {settings.aiProvider === 'anthropic' ? (
+                    <>
+                      <label className="field-row">
+                        <span className="field-label">API Key</span>
+                        <input
+                          key={`ak:${settings.aiAnthropicApiKey}`}
+                          className="ai-input"
+                          type="password"
+                          placeholder="sk-ant-…"
+                          defaultValue={settings.aiAnthropicApiKey}
+                          onBlur={(e) => patch({ aiAnthropicApiKey: e.target.value })}
+                        />
+                      </label>
+                      <label className="field-row">
+                        <span className="field-label">模型</span>
+                        <input
+                          key={`am:${settings.aiAnthropicModel}`}
+                          className="ai-input"
+                          type="text"
+                          placeholder="claude-opus-4-8"
+                          defaultValue={settings.aiAnthropicModel}
+                          onBlur={(e) => patch({ aiAnthropicModel: e.target.value })}
+                        />
+                      </label>
+                      <p className="hint-text hint-text--muted ai-field-hint">
+                        默认 claude-opus-4-8（效果最好）；追求更快更省可改成 claude-haiku-4-5。
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <label className="field-row">
+                        <span className="field-label">Base URL</span>
+                        <input
+                          key={`ob:${settings.aiOpenaiBaseUrl}`}
+                          className="ai-input"
+                          type="text"
+                          placeholder="https://api.openai.com/v1"
+                          defaultValue={settings.aiOpenaiBaseUrl}
+                          onBlur={(e) => patch({ aiOpenaiBaseUrl: e.target.value })}
+                        />
+                      </label>
+                      <label className="field-row">
+                        <span className="field-label">API Key</span>
+                        <input
+                          key={`ok:${settings.aiOpenaiApiKey}`}
+                          className="ai-input"
+                          type="password"
+                          placeholder="sk-…"
+                          defaultValue={settings.aiOpenaiApiKey}
+                          onBlur={(e) => patch({ aiOpenaiApiKey: e.target.value })}
+                        />
+                      </label>
+                      <label className="field-row">
+                        <span className="field-label">模型</span>
+                        <input
+                          key={`om:${settings.aiOpenaiModel}`}
+                          className="ai-input"
+                          type="text"
+                          placeholder="例如 gpt-4o-mini / deepseek-chat"
+                          defaultValue={settings.aiOpenaiModel}
+                          onBlur={(e) => patch({ aiOpenaiModel: e.target.value })}
+                        />
+                      </label>
+                      <p className="hint-text hint-text--muted ai-field-hint">
+                        兼容任何 OpenAI 格式的服务：DeepSeek、月之暗面、Ollama（http://127.0.0.1:11434/v1）等。
+                      </p>
+                    </>
+                  )}
+
+                  <div className="field-row field-row--buttons">
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={aiTestBusy}
+                      onClick={handleTestAi}
+                    >
+                      {aiTestBusy ? '测试中…' : '测试连接'}
+                    </button>
+                    {aiTestResult && (
+                      <span
+                        className={`ai-test-result ${aiTestResult.ok ? 'ai-test-result--ok' : 'ai-test-result--err'}`}
+                      >
+                        {aiTestResult.ok ? `✓ ${aiTestResult.text}` : `✕ ${aiTestResult.error}`}
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <p className="hint-text">
+              开启后，Agent 停下来的气泡会多一句 AI
+              生成的具体说明（做了什么、在等你做什么）。总结失败或超时会自动回落到普通提醒文案，提醒永远不会缺席。
+            </p>
+            <p className="hint-text hint-text--muted">
+              隐私说明：这是可选联网功能。开启时，仅在任务停下的那一刻，把该会话末尾的少量文本发给你
+              <b>自己配置</b>的模型服务生成总结；API Key 只保存在本机。关闭时此功能完全不联网。
+            </p>
           </>
         )}
 

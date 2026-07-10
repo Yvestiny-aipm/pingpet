@@ -17,8 +17,27 @@ export const DEFAULT_SETTINGS: Settings = {
   codexMonitoringEnvs: ['terminal', 'vscode', 'desktop'],
   claudeMonitoringEnvs: ['terminal', 'vscode', 'desktop'],
   agentProgressBubblesEnabled: true,
-  agentCompletionSoundEnabled: false
+  agentCompletionSoundEnabled: false,
+  // v0.5 AI 总结：默认关（保持「默认不联网」），Key 留空由用户自己填
+  aiSummaryEnabled: false,
+  aiProvider: 'anthropic',
+  aiAnthropicApiKey: '',
+  aiAnthropicModel: 'claude-opus-4-8',
+  aiOpenaiBaseUrl: 'https://api.openai.com/v1',
+  aiOpenaiApiKey: '',
+  aiOpenaiModel: ''
 }
+
+// ---------- v0.5 AI 总结常量 ----------
+
+/** 单次总结请求的超时（毫秒）。超时/失败一律回落规则文案，不影响气泡 */
+export const AI_SUMMARY_TIMEOUT_MS = 12_000
+/** 发给模型的会话末尾文本上限（字符）。只取末尾这一小段，控制隐私面和成本 */
+export const AI_TRANSCRIPT_MAX_CHARS = 6_000
+/** 总结回复的输出 token 上限（一句话足够） */
+export const AI_SUMMARY_MAX_TOKENS = 300
+/** 带 AI 总结的终态气泡展示时长（比纯规则文案略长，两行要多读一会儿） */
+export const AGENT_AI_BUBBLE_MS = 9_000
 
 // ---------- v0.2 Agent 监控常量 ----------
 

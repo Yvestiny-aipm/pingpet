@@ -117,7 +117,59 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
   if (typeof partial.autoRemoveBackground === 'boolean') {
     next.autoRemoveBackground = partial.autoRemoveBackground
   }
+  // v0.5 AI 总结：逐字段白名单（漏一个就会静默丢盘，别偷懒）
+  if (typeof partial.aiSummaryEnabled === 'boolean') {
+    next.aiSummaryEnabled = partial.aiSummaryEnabled
+  }
+  if (partial.aiProvider === 'anthropic' || partial.aiProvider === 'openai') {
+    next.aiProvider = partial.aiProvider
+  }
+  if (typeof partial.aiAnthropicApiKey === 'string') {
+    next.aiAnthropicApiKey = sanitizeSecret(partial.aiAnthropicApiKey)
+  }
+  if (typeof partial.aiAnthropicModel === 'string') {
+    next.aiAnthropicModel = sanitizeModelId(partial.aiAnthropicModel)
+  }
+  if (typeof partial.aiOpenaiApiKey === 'string') {
+    next.aiOpenaiApiKey = sanitizeSecret(partial.aiOpenaiApiKey)
+  }
+  if (typeof partial.aiOpenaiModel === 'string') {
+    next.aiOpenaiModel = sanitizeModelId(partial.aiOpenaiModel)
+  }
+  if (typeof partial.aiOpenaiBaseUrl === 'string') {
+    const url = sanitizeAiBaseUrl(partial.aiOpenaiBaseUrl)
+    if (url !== null) next.aiOpenaiBaseUrl = url
+  }
   return next
+}
+
+/** API Key：去掉所有空白（换行/空格都是粘贴事故），长度封顶 */
+function sanitizeSecret(value: string): string {
+  return value.replace(/\s+/g, '').slice(0, 500)
+}
+
+/** 模型 ID：留字母数字与常见分隔符，长度封顶 */
+function sanitizeModelId(value: string): string {
+  return value.trim().replace(/[^\w.\-:/]/g, '').slice(0, 120)
+}
+
+/**
+ * OpenAI 兼容 Base URL：https 任意主机；http 只放行本机（Ollama/LM Studio 等本地服务），
+ * 避免用户把 Key 明文发到远端 http。空串合法（回落默认值由 UI 提示）。
+ */
+function sanitizeAiBaseUrl(value: string): string | null {
+  const v = value.trim().replace(/\/+$/, '').slice(0, 300)
+  if (v === '') return ''
+  try {
+    const u = new URL(v)
+    if (u.protocol === 'https:') return v
+    if (u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === 'localhost')) {
+      return v
+    }
+  } catch {
+    /* 非法 URL 不落盘 */
+  }
+  return null
 }
 
 export function patchSettings(partial: Partial<Settings>): Settings {

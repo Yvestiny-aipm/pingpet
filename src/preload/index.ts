@@ -36,6 +36,7 @@ const api: PetApi = {
   setInteractive: (interactive: boolean) => ipcRenderer.send(IPC.SetInteractive, interactive),
   agentSimulate: (source: AgentSource, kind: AgentEventKind) =>
     ipcRenderer.send(IPC.AgentSimulate, source, kind),
+  testAiSummary: () => ipcRenderer.invoke(IPC.TestAiSummary),
   pickSkin: () => ipcRenderer.invoke(IPC.PickSkin),
   fetchPetdexList: () => ipcRenderer.invoke(IPC.FetchPetdexList),
   installPetdexPet: (zipUrl: string, displayName: string) =>
