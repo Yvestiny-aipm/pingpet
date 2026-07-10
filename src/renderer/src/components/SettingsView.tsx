@@ -221,8 +221,9 @@ export default function SettingsView(): JSX.Element {
       patch({
         aiProvider: 'openai',
         aiOpenaiBaseUrl: SILICONFLOW_BASE_URL,
-        // 首次切过来给个能直接用的默认模型（可改）
-        aiOpenaiModel: settings.aiOpenaiModel || 'deepseek-ai/DeepSeek-V3'
+        // 首次切过来给个能直接用的默认模型（可改）。
+        // 实测 V3 旧端点（含 Pro 版）常年 429 拥堵，V3.1 畅通，默认用 V3.1
+        aiOpenaiModel: settings.aiOpenaiModel || 'deepseek-ai/DeepSeek-V3.1'
       })
     } else {
       patch({
@@ -670,7 +671,7 @@ export default function SettingsView(): JSX.Element {
                           type="text"
                           placeholder={
                             aiProviderChoice === 'siliconflow'
-                              ? '例如 deepseek-ai/DeepSeek-V3'
+                              ? '例如 deepseek-ai/DeepSeek-V3.1'
                               : '例如 gpt-4o-mini / deepseek-chat'
                           }
                           defaultValue={settings.aiOpenaiModel}
@@ -679,7 +680,7 @@ export default function SettingsView(): JSX.Element {
                       </label>
                       <p className="hint-text hint-text--muted ai-field-hint">
                         {aiProviderChoice === 'siliconflow'
-                          ? 'Key 在 cloud.siliconflow.cn「API 密钥」页生成；模型 ID 按硅基流动模型广场的名字填（默认 DeepSeek-V3 即可用）。'
+                          ? 'Key 在 cloud.siliconflow.cn「API 密钥」页生成；模型 ID 按硅基流动模型广场的名字填（默认 DeepSeek-V3.1；报 429 拥堵可换 Qwen/Qwen2.5-72B-Instruct）。'
                           : '兼容任何 OpenAI 格式的服务：DeepSeek、月之暗面、Ollama（http://127.0.0.1:11434/v1）等。'}
                       </p>
                     </>

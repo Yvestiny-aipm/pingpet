@@ -153,7 +153,8 @@ async function callOpenAiCompatible(settings: Settings, userContent: string): Pr
   const base = (settings.aiOpenaiBaseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '')
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), AI_SUMMARY_TIMEOUT_MS)
-  try {
+
+  const once = async (): Promise<string> => {
     const res = await electronFetch(`${base}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -173,7 +174,12 @@ async function callOpenAiCompatible(settings: Settings, userContent: string): Pr
     })
     if (!res.ok) {
       const body = (await res.text().catch(() => '')).slice(0, 200)
-      throw new Error(`HTTP ${res.status}${body ? `：${body}` : ''}`)
+      const err = new Error(`HTTP ${res.status}${body ? `：${body}` : ''}`) as Error & {
+        retryable?: boolean
+      }
+      // 429 / 5xx 是平台瞬时拥堵（硅基流动 50609 之类），值得重试一次
+      err.retryable = res.status === 429 || res.status >= 500
+      throw err
     }
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>
@@ -181,6 +187,19 @@ async function callOpenAiCompatible(settings: Settings, userContent: string): Pr
     const text = data.choices?.[0]?.message?.content
     if (typeof text === 'string' && text.trim()) return text
     throw new Error('模型没有返回文本')
+  }
+
+  try {
+    try {
+      return await once()
+    } catch (err) {
+      // 瞬时拥堵重试一次（等 1.5s）；总时长仍受同一个 AbortController 上限约束
+      if ((err as { retryable?: boolean }).retryable) {
+        await new Promise((r) => setTimeout(r, 1_500))
+        return await once()
+      }
+      throw err
+    }
   } finally {
     clearTimeout(timer)
   }
