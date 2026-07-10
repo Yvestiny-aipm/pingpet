@@ -699,7 +699,9 @@ export default function SettingsView(): JSX.Element {
                       <span
                         className={`ai-test-result ${aiTestResult.ok ? 'ai-test-result--ok' : 'ai-test-result--err'}`}
                       >
-                        {aiTestResult.ok ? `✓ ${aiTestResult.text}` : `✕ ${aiTestResult.error}`}
+                        {aiTestResult.ok
+                          ? `✓ 连接成功！模型对内置样例的总结演示：「${aiTestResult.text}」`
+                          : `✕ ${aiTestResult.error}`}
                       </span>
                     )}
                   </div>
