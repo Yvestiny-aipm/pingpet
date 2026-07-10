@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- PetDex 图床开了防盗链（Referer 非 petdex.dev 一律 403），全页不发 Referer 才能拉清单和样例缩略图 -->
+<meta name="referrer" content="no-referrer" />
 <title>桌宠 PingPet · 帮你盯着 Codex / Claude Code 的桌面小伙伴</title>
 <meta name="description" content="PingPet 是一只住在 macOS 桌面上的像素小伙伴，帮你盯着 Codex / Claude Code —— 任务停下时第一时间提醒你，忙时不打扰。本地优先，无需账号，兼容 Codex 宠物格式。" />
 <meta property="og:title" content="桌宠 PingPet · 帮你盯着 AI 干活的桌面小伙伴" />
@@ -179,11 +181,13 @@
     display:flex; align-items:center; gap:10px; padding:8px 10px 8px 8px;
     border:1px solid var(--line); border-radius:14px; background:var(--panel);
   }
+  /* 缩略图改用 <img>（裁精灵图第一帧）：CSS background-image 发请求时
+     Chrome 不吃 meta no-referrer，会带 Referer 被 PetDex 防盗链 403 */
   .pd-sample-thumb {
     width:44px; height:44px; border-radius:9px; background:var(--soft); flex:none;
-    background-repeat:no-repeat; background-size:800% 900%; background-position:0 0;
-    image-rendering:pixelated;
+    overflow:hidden;
   }
+  .pd-sample-thumb img { width:800%; height:900%; display:block; image-rendering:pixelated; }
   .pd-sample-name { font-size:13px; font-weight:700; max-width:88px; overflow:hidden;
     text-overflow:ellipsis; white-space:nowrap; }
   .pd-sample-btn {
@@ -482,8 +486,17 @@
     if(!row) return;
     // 想优先展示的几只热门/原创样例 slug
     var wanted = ['boba','wangcai','usagi','testbird','tiko'];
-    fetch('https://petdex.dev/api/manifest')
-      .then(function(r){ return r.json(); })
+    // PetDex 的 CDN 缓存副本可能缺 CORS 头（上游没配 Vary: Origin）；
+    // 失败时带唯一参数强制缓存 MISS 直连回源，回源响应必带 CORS 头。
+    function fetchPetdexManifest(){
+      return fetch('https://petdex.dev/api/manifest')
+        .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+        .catch(function(){
+          return fetch('https://assets.petdex.dev/manifests/petdex-v1.json?fresh=' + Date.now())
+            .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+        });
+    }
+    fetchPetdexManifest()
       .then(function(d){
         var bySlug = {};
         (d.pets||[]).forEach(function(p){ bySlug[p.slug]=p; });
@@ -495,7 +508,7 @@
           var card = document.createElement('div');
           card.className = 'pd-sample';
           card.innerHTML =
-            '<span class="pd-sample-thumb" style="background-image:url(\'' + p.spritesheetUrl + '\')"></span>' +
+            '<span class="pd-sample-thumb"><img src="' + p.spritesheetUrl + '" referrerpolicy="no-referrer" alt="" draggable="false"></span>' +
             '<span class="pd-sample-name" title="' + p.displayName + '">' + p.displayName + '</span>' +
             '<a class="pd-sample-btn" href="' + deep + '">导入</a>';
           row.appendChild(card);
