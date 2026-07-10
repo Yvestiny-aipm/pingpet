@@ -204,6 +204,38 @@ export default function SettingsView(): JSX.Element {
 
   const selectedPet = pets.find((p) => p.id === settings.selectedPetId) ?? pets[0]
 
+  // v0.5：模型服务下拉的三个选项。硅基流动本质是 OpenAI 兼容接口的一键预设
+  // （Base URL 固定），存储层不新增 provider，靠 baseUrl 反推当前选中项。
+  type AiProviderChoice = 'anthropic' | 'siliconflow' | 'openai'
+  const SILICONFLOW_BASE_URL = 'https://api.siliconflow.cn/v1'
+  const aiProviderChoice: AiProviderChoice =
+    settings.aiProvider === 'anthropic'
+      ? 'anthropic'
+      : settings.aiOpenaiBaseUrl === SILICONFLOW_BASE_URL
+        ? 'siliconflow'
+        : 'openai'
+  const applyAiProviderChoice = (choice: AiProviderChoice): void => {
+    if (choice === 'anthropic') {
+      patch({ aiProvider: 'anthropic' })
+    } else if (choice === 'siliconflow') {
+      patch({
+        aiProvider: 'openai',
+        aiOpenaiBaseUrl: SILICONFLOW_BASE_URL,
+        // 首次切过来给个能直接用的默认模型（可改）
+        aiOpenaiModel: settings.aiOpenaiModel || 'deepseek-ai/DeepSeek-V3'
+      })
+    } else {
+      patch({
+        aiProvider: 'openai',
+        // 从硅基流动预设切回通用模式时，把 Base URL 复位成 OpenAI 官方
+        aiOpenaiBaseUrl:
+          settings.aiOpenaiBaseUrl === SILICONFLOW_BASE_URL
+            ? 'https://api.openai.com/v1'
+            : settings.aiOpenaiBaseUrl
+      })
+    }
+  }
+
   // v0.5：AI 总结「测试连接」——主进程用当前设置发一次真实请求
   const handleTestAi = (): void => {
     setAiTestBusy(true)
@@ -564,12 +596,13 @@ export default function SettingsView(): JSX.Element {
                   <label className="field-row">
                     <span className="field-label">模型服务</span>
                     <select
-                      value={settings.aiProvider}
+                      value={aiProviderChoice}
                       onChange={(e) => {
                         setAiTestResult(null)
-                        patch({ aiProvider: e.target.value as Settings['aiProvider'] })
+                        applyAiProviderChoice(e.target.value as AiProviderChoice)
                       }}
                     >
+                      <option value="siliconflow">硅基流动（SiliconFlow）</option>
                       <option value="anthropic">Anthropic（Claude）</option>
                       <option value="openai">OpenAI 兼容接口</option>
                     </select>
@@ -605,17 +638,19 @@ export default function SettingsView(): JSX.Element {
                     </>
                   ) : (
                     <>
-                      <label className="field-row">
-                        <span className="field-label">Base URL</span>
-                        <input
-                          key={`ob:${settings.aiOpenaiBaseUrl}`}
-                          className="ai-input"
-                          type="text"
-                          placeholder="https://api.openai.com/v1"
-                          defaultValue={settings.aiOpenaiBaseUrl}
-                          onBlur={(e) => patch({ aiOpenaiBaseUrl: e.target.value })}
-                        />
-                      </label>
+                      {aiProviderChoice === 'openai' && (
+                        <label className="field-row">
+                          <span className="field-label">Base URL</span>
+                          <input
+                            key={`ob:${settings.aiOpenaiBaseUrl}`}
+                            className="ai-input"
+                            type="text"
+                            placeholder="https://api.openai.com/v1"
+                            defaultValue={settings.aiOpenaiBaseUrl}
+                            onBlur={(e) => patch({ aiOpenaiBaseUrl: e.target.value })}
+                          />
+                        </label>
+                      )}
                       <label className="field-row">
                         <span className="field-label">API Key</span>
                         <input
@@ -633,13 +668,19 @@ export default function SettingsView(): JSX.Element {
                           key={`om:${settings.aiOpenaiModel}`}
                           className="ai-input"
                           type="text"
-                          placeholder="例如 gpt-4o-mini / deepseek-chat"
+                          placeholder={
+                            aiProviderChoice === 'siliconflow'
+                              ? '例如 deepseek-ai/DeepSeek-V3'
+                              : '例如 gpt-4o-mini / deepseek-chat'
+                          }
                           defaultValue={settings.aiOpenaiModel}
                           onBlur={(e) => patch({ aiOpenaiModel: e.target.value })}
                         />
                       </label>
                       <p className="hint-text hint-text--muted ai-field-hint">
-                        兼容任何 OpenAI 格式的服务：DeepSeek、月之暗面、Ollama（http://127.0.0.1:11434/v1）等。
+                        {aiProviderChoice === 'siliconflow'
+                          ? 'Key 在 cloud.siliconflow.cn「API 密钥」页生成；模型 ID 按硅基流动模型广场的名字填（默认 DeepSeek-V3 即可用）。'
+                          : '兼容任何 OpenAI 格式的服务：DeepSeek、月之暗面、Ollama（http://127.0.0.1:11434/v1）等。'}
                       </p>
                     </>
                   )}
