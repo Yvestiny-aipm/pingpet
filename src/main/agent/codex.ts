@@ -1,6 +1,8 @@
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import {
+  AGENT_EVENT_FRESH_MS,
+  AGENT_FILE_FRESH_MS,
   AGENT_MAX_FILES_PER_SOURCE,
   AGENT_SCAN_MAX_DEPTH,
   AGENT_TAIL_BYTES
@@ -104,6 +106,10 @@ function parseCodexFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
     }
   }
 
+  // 一个会话文件的 tail 里往往堆着几十个历史回合，它们的事件必然过期、必然被 monitor 丢弃。
+  // 在这里就跳过，省掉后面的文本分类开销（1 秒一轮，白做的量很可观）。
+  const oldestMs = nowMs - AGENT_EVENT_FRESH_MS
+
   for (const line of lines) {
     const type = line.type
     const payload =
@@ -112,6 +118,7 @@ function parseCodexFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
         : {}
     const payloadType = payload.type
     const tsMs = getTimestampMs(line) || nowMs
+    if (tsMs < oldestMs) continue
 
     let kind: AgentEventKind | null = null
     let message = ''
@@ -184,7 +191,8 @@ export function scanCodex(nowMs: number): AgentMonitorEvent[] {
     codexSessionsRoot(),
     ['.jsonl'],
     AGENT_MAX_FILES_PER_SOURCE,
-    AGENT_SCAN_MAX_DEPTH
+    AGENT_SCAN_MAX_DEPTH,
+    { minMtimeMs: nowMs - AGENT_FILE_FRESH_MS }
   )
   const all: AgentMonitorEvent[] = []
   for (const f of files) {

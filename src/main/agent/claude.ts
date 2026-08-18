@@ -1,6 +1,8 @@
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import {
+  AGENT_EVENT_FRESH_MS,
+  AGENT_FILE_FRESH_MS,
   AGENT_MAX_FILES_PER_SOURCE,
   AGENT_SCAN_MAX_DEPTH,
   AGENT_TAIL_BYTES
@@ -74,6 +76,9 @@ function parseClaudeFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
     if (ep) env = ep
   }
 
+  // tail 里的历史回合事件必然过期、必然被 monitor 丢弃，提前跳过省掉后面的文本分类开销
+  const oldestMs = nowMs - AGENT_EVENT_FRESH_MS
+
   for (const line of lines) {
     const type = line.type
     const message =
@@ -81,6 +86,7 @@ function parseClaudeFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
         ? (line.message as Record<string, unknown>)
         : {}
     const tsMs = getTimestampMs(line) || nowMs
+    if (tsMs < oldestMs) continue
     const sessionKey = sessionKeyFor(filePath, line)
 
     let kind: AgentEventKind | null = null
@@ -139,7 +145,8 @@ export function scanClaude(nowMs: number): AgentMonitorEvent[] {
     claudeProjectsRoot(),
     ['.jsonl'],
     AGENT_MAX_FILES_PER_SOURCE,
-    AGENT_SCAN_MAX_DEPTH
+    AGENT_SCAN_MAX_DEPTH,
+    { minMtimeMs: nowMs - AGENT_FILE_FRESH_MS }
   )
   const all: AgentMonitorEvent[] = []
   for (const f of files) {

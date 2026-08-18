@@ -67,6 +67,17 @@ export const AGENT_MAX_FILES_PER_SOURCE = 12
 export const AGENT_TAIL_BYTES = 96_000
 /** 只处理最近这段时间内的事件（毫秒），避免读到老日志 */
 export const AGENT_EVENT_FRESH_MS = 120_000
+/**
+ * 会话文件的新鲜度上限（毫秒）：mtime 早于这个时间的文件直接跳过，连打开都不打开。
+ *
+ * 依据：一个文件若这么久没被写过，它里面不可能有落在 AGENT_EVENT_FRESH_MS 窗口内的新事件，
+ * 生成出来也会被 monitor 原样丢弃。不加这道闸时，重度用户目录下每秒都要把十几个历史会话
+ * 各读 96KB 尾部、逐行 JSON.parse、产出上百个事件再全部丢掉——纯白烧 CPU。
+ *
+ * 取 AGENT_EVENT_FRESH_MS 的 2 倍作安全余量：文件 mtime 与行内时间戳之间可能有偏差
+ * （落盘延迟、时钟微调），留一倍冗余确保不会因为边界误差漏掉真正新鲜的事件。
+ */
+export const AGENT_FILE_FRESH_MS = AGENT_EVENT_FRESH_MS * 2
 /** seenEventIds 最多保留条数（超过后丢最旧的） */
 export const AGENT_SEEN_IDS_MAX = 500
 /** activeSession 超过这段时间未更新即过期（毫秒） */

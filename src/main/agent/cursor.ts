@@ -2,6 +2,7 @@ import { readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join, relative, sep } from 'node:path'
 import {
+  AGENT_FILE_FRESH_MS,
   AGENT_MAX_FILES_PER_SOURCE,
   AGENT_SCAN_MAX_DEPTH,
   AGENT_TAIL_BYTES
@@ -226,7 +227,9 @@ export function scanCursor(nowMs: number): AgentMonitorEvent[] {
     transcriptRoots(root),
     ['.jsonl'],
     AGENT_MAX_FILES_PER_SOURCE,
-    AGENT_SCAN_MAX_DEPTH
+    AGENT_SCAN_MAX_DEPTH,
+    // Cursor 用文件 mtime 当事件时间，mtime 太老的文件产出的事件必然过期，直接不读
+    { minMtimeMs: nowMs - AGENT_FILE_FRESH_MS }
   )
   const all: AgentMonitorEvent[] = []
   for (const f of files) {
