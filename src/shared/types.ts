@@ -35,12 +35,20 @@ export interface Settings {
   codexMonitoringEnabled: boolean
   /** 是否监控 Claude Code 会话 */
   claudeMonitoringEnabled: boolean
+  /** v0.6：是否监控 Cursor 会话 */
+  cursorMonitoringEnabled: boolean
+  /** v0.6.1：是否监控 Grok Bot 会话 */
+  grokMonitoringEnabled: boolean
   // v0.3.3：每家监控哪些环境（终端 / VS Code / 客户端），可多选；
   // 开关开着但环境空数组 = 该家实际不监控。默认全选三个环境。
   /** Codex 监控的环境集合 */
   codexMonitoringEnvs: AgentEnv[]
   /** Claude Code 监控的环境集合 */
   claudeMonitoringEnvs: AgentEnv[]
+  /** v0.6：Cursor 监控的环境集合（只有 terminal / desktop 有效，见 AGENT_SOURCE_ENVS） */
+  cursorMonitoringEnvs: AgentEnv[]
+  /** v0.6.1：Grok Bot 监控的环境集合（只有 desktop 有效，见 AGENT_SOURCE_ENVS） */
+  grokMonitoringEnvs: AgentEnv[]
   /**
    * @deprecated v0.2.1 起 working 不再弹气泡（只切思考视觉），此开关已无效果。
    * 字段保留仅为兼容旧存盘 / 避免 sanitize 丢字段，UI 已移除。
@@ -83,19 +91,39 @@ export type AiTestResult = { ok: true; text: string } | { ok: false; error: stri
  */
 export type PetState = 'idle' | 'happy' | 'sleepy' | 'attention' | 'thinking' | 'failed'
 
-/** v0.2：Agent 来源 */
-export type AgentSource = 'codex' | 'claude'
+/** v0.2：Agent 来源。v0.6 新增 cursor，v0.6.1 新增 grok（Grok Bot 客户端） */
+export type AgentSource = 'codex' | 'claude' | 'cursor' | 'grok'
 
 /**
  * v0.3.3：Agent 运行环境。会话文件里自报：
  *  - Claude：entrypoint 字段（cli→terminal / claude-vscode→vscode / claude-desktop→desktop）
  *  - Codex ：session_meta 的 source 字段（vscode 等）
+ *  - Cursor：会话文件里没有任何环境字段，靠 project 目录的边车文件反推（见 agent/cursor.ts）
  * 读不出来的会话归入 'terminal'（默认档，不静默漏报）。
  */
 export type AgentEnv = 'terminal' | 'vscode' | 'desktop'
 
 /** v0.3.3：三个环境的固定顺序 + 展示名（渲染层复用） */
 export const AGENT_ENVS: readonly AgentEnv[] = ['terminal', 'vscode', 'desktop'] as const
+
+/**
+ * v0.6：每家实际**能被监听到**的环境集合。
+ *
+ * Cursor 少一个 vscode：Cursor 官方不出 VS Code 扩展（它自己就是 VS Code 的 fork），
+ * 在 VS Code 里用 Cursor 只能走 ACP（`agent acp`）。实测 ACP 会话只建 project 目录、
+ * 写 worker.log / repo.json，**完全不写 agent-transcripts JSONL**，文件监听拿不到任何事件。
+ * 因此该档不提供勾选，避免做出一个永远不触发的假开关。
+ *
+ * v0.6.1：Grok Bot 只有 desktop。它官方就只出 macOS / Windows 桌面端和 iOS App，
+ * 没有 CLI 也没有 IDE 插件。手机端派的活会同步到桌面端的同一份本地文件，
+ * 所以开着客户端就等于把 iOS 那边也覆盖了。
+ */
+export const AGENT_SOURCE_ENVS: Record<AgentSource, readonly AgentEnv[]> = {
+  codex: ['terminal', 'vscode', 'desktop'],
+  claude: ['terminal', 'vscode', 'desktop'],
+  cursor: ['terminal', 'desktop'],
+  grok: ['desktop']
+}
 
 /** v0.2：Agent 会话状态四分类 */
 export type AgentEventKind = 'working' | 'done' | 'needs_attention' | 'failed'

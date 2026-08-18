@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PET_SCALE_MAX, PET_SCALE_MIN } from '@shared/defaults'
-import { AGENT_ENVS } from '@shared/types'
+import { AGENT_ENVS, AGENT_SOURCE_ENVS } from '@shared/types'
 import type {
   AgentEnv,
   AgentEventKind,
@@ -29,7 +29,9 @@ const AGENT_KIND_LABEL: Record<AgentEventKind, string> = {
 
 const AGENT_SOURCE_LABEL: Record<AgentSource, string> = {
   codex: 'Codex',
-  claude: 'Claude Code'
+  claude: 'Claude Code',
+  cursor: 'Cursor',
+  grok: 'Grok Bot'
 }
 
 const AGENT_ENV_LABEL: Record<AgentEnv, string> = {
@@ -38,11 +40,45 @@ const AGENT_ENV_LABEL: Record<AgentEnv, string> = {
   desktop: '客户端'
 }
 
+/** 某家不支持某个环境时，勾选框置灰并给出原因 */
+const ENV_UNSUPPORTED_HINT: Partial<Record<AgentSource, string>> = {
+  cursor:
+    'Cursor 没有官方 VS Code 插件（它本身就是 VS Code 的分支）。在 VS Code 里用 Cursor 只能走 ACP，而 ACP 会话不会写本地会话文件，无法监听。',
+  grok:
+    'Grok Bot 官方只有 macOS / Windows 客户端和 iOS App，没有命令行工具也没有 IDE 插件。手机上派的活会同步到客户端，所以开着客户端就一并覆盖了。'
+}
+
+/** 监控环境字段名（每家一个），toggleEnv 与 MONITOR_ROWS 共用 */
+type EnvsKey =
+  | 'codexMonitoringEnvs'
+  | 'claudeMonitoringEnvs'
+  | 'cursorMonitoringEnvs'
+  | 'grokMonitoringEnvs'
+
+/** Agent 监控设置里的四家：开关字段 + 环境字段一一对应 */
+const MONITOR_ROWS: Array<{
+  source: AgentSource
+  enabledKey:
+    | 'codexMonitoringEnabled'
+    | 'claudeMonitoringEnabled'
+    | 'cursorMonitoringEnabled'
+    | 'grokMonitoringEnabled'
+  envsKey: EnvsKey
+}> = [
+  { source: 'codex', enabledKey: 'codexMonitoringEnabled', envsKey: 'codexMonitoringEnvs' },
+  { source: 'claude', enabledKey: 'claudeMonitoringEnabled', envsKey: 'claudeMonitoringEnvs' },
+  { source: 'cursor', enabledKey: 'cursorMonitoringEnabled', envsKey: 'cursorMonitoringEnvs' },
+  { source: 'grok', enabledKey: 'grokMonitoringEnabled', envsKey: 'grokMonitoringEnvs' }
+]
+
 const SIMULATE_BUTTONS: Array<{ source: AgentSource; kind: AgentEventKind; label: string }> = [
   { source: 'codex', kind: 'working', label: '模拟 处理中（只切思考视觉·不弹气泡）' },
   { source: 'claude', kind: 'done', label: '模拟 输出结束·完成' },
   { source: 'claude', kind: 'needs_attention', label: '模拟 停下·需要你处理' },
-  { source: 'claude', kind: 'failed', label: '模拟 停下·出错中断' }
+  { source: 'claude', kind: 'failed', label: '模拟 停下·出错中断' },
+  { source: 'cursor', kind: 'done', label: '模拟 Cursor 输出结束·完成' },
+  { source: 'grok', kind: 'done', label: '模拟 Grok Bot 回你消息了' },
+  { source: 'grok', kind: 'needs_attention', label: '模拟 Grok Bot 等你批准' }
 ]
 
 function formatTime(ms: number | null): string {
@@ -100,11 +136,7 @@ export default function SettingsView(): JSX.Element {
   }
 
   // v0.3.3：勾选/取消某家 Agent 的一个监控环境，按 AGENT_ENVS 固定顺序回写
-  const toggleEnv = (
-    key: 'codexMonitoringEnvs' | 'claudeMonitoringEnvs',
-    current: AgentEnv[],
-    env: AgentEnv
-  ): void => {
+  const toggleEnv = (key: EnvsKey, current: AgentEnv[], env: AgentEnv): void => {
     const set = new Set(current)
     if (set.has(env)) set.delete(env)
     else set.add(env)
@@ -454,65 +486,51 @@ export default function SettingsView(): JSX.Element {
           <>
             <header className="panel-head">
               <h2>Agent 监控</h2>
-              <p>Codex / Claude Code 忙完或需要你时，第一时间提醒你。</p>
+              <p>Codex / Claude Code / Cursor / Grok Bot 忙完或需要你时，第一时间提醒你。</p>
             </header>
             <div className="field-card">
-              <label className="field-row">
-                <span className="field-label">监控 Codex</span>
-                <input
-                  type="checkbox"
-                  className="switch"
-                  checked={settings.codexMonitoringEnabled}
-                  onChange={(e) => patch({ codexMonitoringEnabled: e.target.checked })}
-                />
-              </label>
-              {settings.codexMonitoringEnabled && (
-                <div className="env-row">
-                  <span className="env-row-label">监控环境</span>
-                  <div className="env-chips">
-                    {AGENT_ENVS.map((env) => (
-                      <label key={env} className="env-chip">
-                        <input
-                          type="checkbox"
-                          checked={settings.codexMonitoringEnvs.includes(env)}
-                          onChange={() =>
-                            toggleEnv('codexMonitoringEnvs', settings.codexMonitoringEnvs, env)
-                          }
-                        />
-                        <span>{AGENT_ENV_LABEL[env]}</span>
-                      </label>
-                    ))}
+              {MONITOR_ROWS.map(({ source, enabledKey, envsKey }) => {
+                const supported = AGENT_SOURCE_ENVS[source]
+                const hint = ENV_UNSUPPORTED_HINT[source]
+                return (
+                  <div key={source}>
+                    <label className="field-row">
+                      <span className="field-label">监控 {AGENT_SOURCE_LABEL[source]}</span>
+                      <input
+                        type="checkbox"
+                        className="switch"
+                        checked={settings[enabledKey]}
+                        onChange={(e) => patch({ [enabledKey]: e.target.checked })}
+                      />
+                    </label>
+                    {settings[enabledKey] && (
+                      <div className="env-row">
+                        <span className="env-row-label">监控环境</span>
+                        <div className="env-chips">
+                          {AGENT_ENVS.map((env) => {
+                            const usable = supported.includes(env)
+                            return (
+                              <label
+                                key={env}
+                                className="env-chip"
+                                title={usable ? undefined : hint}
+                              >
+                                <input
+                                  type="checkbox"
+                                  disabled={!usable}
+                                  checked={usable && settings[envsKey].includes(env)}
+                                  onChange={() => toggleEnv(envsKey, settings[envsKey], env)}
+                                />
+                                <span>{AGENT_ENV_LABEL[env]}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
-              <label className="field-row">
-                <span className="field-label">监控 Claude Code</span>
-                <input
-                  type="checkbox"
-                  className="switch"
-                  checked={settings.claudeMonitoringEnabled}
-                  onChange={(e) => patch({ claudeMonitoringEnabled: e.target.checked })}
-                />
-              </label>
-              {settings.claudeMonitoringEnabled && (
-                <div className="env-row">
-                  <span className="env-row-label">监控环境</span>
-                  <div className="env-chips">
-                    {AGENT_ENVS.map((env) => (
-                      <label key={env} className="env-chip">
-                        <input
-                          type="checkbox"
-                          checked={settings.claudeMonitoringEnvs.includes(env)}
-                          onChange={() =>
-                            toggleEnv('claudeMonitoringEnvs', settings.claudeMonitoringEnvs, env)
-                          }
-                        />
-                        <span>{AGENT_ENV_LABEL[env]}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
+                )
+              })}
               <label className="field-row">
                 <span className="field-label">完成提示音</span>
                 <input
@@ -525,7 +543,7 @@ export default function SettingsView(): JSX.Element {
             </div>
 
             <p className="hint-text">
-              两个都关掉，它就是一只安静陪你的普通桌宠。开启后，只有 Agent「停下来」时才弹气泡：输出结束（完成）、需要你处理（授权
+              全部关掉，它就是一只安静陪你的普通桌宠。开启后，只有 Agent「停下来」时才弹气泡：输出结束（完成）、需要你处理（授权
               / 回答问题 / 帮忙验证）、出错或被中断。正在干活时小桌宠只安静地做思考表情，不打扰你。
             </p>
 
@@ -549,7 +567,7 @@ export default function SettingsView(): JSX.Element {
             </div>
 
             <p className="hint-text hint-text--muted">
-              监控覆盖终端、VS Code 与桌面客户端里的 Codex / Claude Code（纯网页端暂不支持）。只读取本机会话状态文件，不上传代码或日志。
+              监控覆盖终端、VS Code 与桌面客户端（纯网页端暂不支持）；每家能选哪些环境不一样，置灰的那档鼠标悬停可看原因。只读取本机会话状态文件，不上传代码或日志。
             </p>
 
             {!isPackaged && (

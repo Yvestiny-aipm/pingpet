@@ -101,12 +101,22 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
   if (typeof partial.claudeMonitoringEnabled === 'boolean') {
     next.claudeMonitoringEnabled = partial.claudeMonitoringEnabled
   }
+  if (typeof partial.cursorMonitoringEnabled === 'boolean') {
+    next.cursorMonitoringEnabled = partial.cursorMonitoringEnabled
+  }
+  if (typeof partial.grokMonitoringEnabled === 'boolean') {
+    next.grokMonitoringEnabled = partial.grokMonitoringEnabled
+  }
   // v0.3.3：每家监控的环境集合（过滤成合法值）
   {
     const codexEnvs = sanitizeEnvs(partial.codexMonitoringEnvs)
     if (codexEnvs) next.codexMonitoringEnvs = codexEnvs
     const claudeEnvs = sanitizeEnvs(partial.claudeMonitoringEnvs)
     if (claudeEnvs) next.claudeMonitoringEnvs = claudeEnvs
+    const cursorEnvs = sanitizeEnvs(partial.cursorMonitoringEnvs)
+    if (cursorEnvs) next.cursorMonitoringEnvs = cursorEnvs
+    const grokEnvs = sanitizeEnvs(partial.grokMonitoringEnvs)
+    if (grokEnvs) next.grokMonitoringEnvs = grokEnvs
   }
   if (typeof partial.agentProgressBubblesEnabled === 'boolean') {
     next.agentProgressBubblesEnabled = partial.agentProgressBubblesEnabled

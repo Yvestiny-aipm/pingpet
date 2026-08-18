@@ -347,7 +347,11 @@ function agentStatus(): AgentMonitorStatus {
   if (agentMonitor) return agentMonitor.getStatus()
   const s = getSettings()
   return {
-    enabled: s.codexMonitoringEnabled || s.claudeMonitoringEnabled,
+    enabled:
+      s.codexMonitoringEnabled ||
+      s.claudeMonitoringEnabled ||
+      s.cursorMonitoringEnabled ||
+      s.grokMonitoringEnabled,
     lastEvent: null,
     activeSessions: [],
     lastCheckedAt: null,
@@ -361,8 +365,12 @@ function syncAgentMonitor(): void {
   const config = {
     codexEnabled: s.codexMonitoringEnabled,
     claudeEnabled: s.claudeMonitoringEnabled,
+    cursorEnabled: s.cursorMonitoringEnabled,
+    grokEnabled: s.grokMonitoringEnabled,
     codexEnvs: s.codexMonitoringEnvs,
-    claudeEnvs: s.claudeMonitoringEnvs
+    claudeEnvs: s.claudeMonitoringEnvs,
+    cursorEnvs: s.cursorMonitoringEnvs,
+    grokEnvs: s.grokMonitoringEnvs
   }
   if (!agentMonitor) {
     agentMonitor = new AgentMonitor(config, {
@@ -416,8 +424,12 @@ function applySettings(partial: Partial<Settings>): Snapshot {
   if (
     before.codexMonitoringEnabled !== next.codexMonitoringEnabled ||
     before.claudeMonitoringEnabled !== next.claudeMonitoringEnabled ||
+    before.cursorMonitoringEnabled !== next.cursorMonitoringEnabled ||
+    before.grokMonitoringEnabled !== next.grokMonitoringEnabled ||
     JSON.stringify(before.codexMonitoringEnvs) !== JSON.stringify(next.codexMonitoringEnvs) ||
-    JSON.stringify(before.claudeMonitoringEnvs) !== JSON.stringify(next.claudeMonitoringEnvs)
+    JSON.stringify(before.claudeMonitoringEnvs) !== JSON.stringify(next.claudeMonitoringEnvs) ||
+    JSON.stringify(before.cursorMonitoringEnvs) !== JSON.stringify(next.cursorMonitoringEnvs) ||
+    JSON.stringify(before.grokMonitoringEnvs) !== JSON.stringify(next.grokMonitoringEnvs)
   ) {
     syncAgentMonitor()
   }
@@ -735,7 +747,7 @@ function registerIpc(): void {
   ipcMain.on(IPC.AgentSimulate, (event, source: unknown, kind: unknown) => {
     if (!isTrustedSender(event)) return
     if (app.isPackaged) return // 打包环境不提供模拟
-    const validSources: AgentSource[] = ['codex', 'claude']
+    const validSources: AgentSource[] = ['codex', 'claude', 'cursor', 'grok']
     const validKinds: AgentEventKind[] = ['working', 'done', 'needs_attention', 'failed']
     if (!validSources.includes(source as AgentSource)) return
     if (!validKinds.includes(kind as AgentEventKind)) return

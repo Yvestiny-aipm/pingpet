@@ -32,7 +32,9 @@ import type { AgentMonitorEvent, AgentSource, AgentStopReason } from '@shared/ty
  */
 const SOURCE_NAME: Record<AgentSource, string> = {
   codex: 'Codex',
-  claude: 'Claude Code'
+  claude: 'Claude Code',
+  cursor: 'Cursor',
+  grok: 'Grok Bot'
 }
 
 /** 每种停止原因对应一句主文案（不含来源名和细节） */

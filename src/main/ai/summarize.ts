@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { net } from 'electron'
 import Anthropic from '@anthropic-ai/sdk'
 import {
@@ -90,6 +91,72 @@ function codexTranscript(lines: Record<string, unknown>[]): string[] {
 }
 
 /**
+ * 提取 Cursor 会话（~/.cursor/projects 下 agent-transcripts 里的 jsonl）末尾的对话。
+ * 与另外两家不同：角色在顶层 role 字段，文本在 message.content 里；
+ * 用户那条被 Cursor 包了一层 <timestamp>/<user_query> 标签，这里剥掉只留正文。
+ */
+function cursorTranscript(lines: Record<string, unknown>[]): string[] {
+  const out: string[] = []
+  for (const line of lines) {
+    const role = line.role
+    if (role !== 'user' && role !== 'assistant') continue
+    const message =
+      line.message && typeof line.message === 'object'
+        ? (line.message as Record<string, unknown>)
+        : null
+    if (!message) continue
+    let text = extractText(message.content).trim()
+    if (!text) continue
+    if (role === 'user') {
+      text = text
+        .replace(/<timestamp>[\s\S]*?<\/timestamp>/g, '')
+        .replace(/<\/?user_query>/g, '')
+        .trim()
+      if (!text) continue
+    }
+    out.push(`${role === 'user' ? '[用户]' : '[助手]'} ${text}`)
+  }
+  return out
+}
+
+/**
+ * 提取 Grok Bot 会话（Application Support/Grok Bot/sand-client-persistence/*.blob）的对话。
+ *
+ * 这家的存法和另外三家都不同：文件是整份 JSON（不是 JSONL），而且 Bot 回复**你**的内容
+ * 放在 send-message 条目里；kind==='message' 且带 fromAgent / toAgent 的，是 Bot 之间
+ * 互相协作的消息——一并带上有助于说清「它这段时间在干嘛」，但要标清楚发话人。
+ */
+function grokTranscript(filePath: string): string[] {
+  const parsed: unknown = JSON.parse(readFileSync(filePath, 'utf8'))
+  const value = (parsed as Record<string, unknown> | null)?.value
+  const entries = (value as Record<string, unknown> | undefined)?.entries
+  if (!Array.isArray(entries)) return []
+
+  const out: string[] = []
+  for (const raw of entries) {
+    if (!raw || typeof raw !== 'object') continue
+    const e = raw as Record<string, unknown>
+    if (e.kind === 'send-message') {
+      const msg = e.message
+      if (!msg || typeof msg !== 'object') continue
+      const m = msg as Record<string, unknown>
+      if (m.type !== 'text' || typeof m.content !== 'string') continue
+      const text = m.content.trim()
+      if (text) out.push(`[Bot] ${text}`)
+      continue
+    }
+    if (e.kind !== 'message' || typeof e.content !== 'string') continue
+    const text = e.content.trim()
+    if (!text) continue
+    if (e.fromAgent) out.push(`[其他 Bot] ${text}`)
+    else if (e.toAgent) out.push(`[Bot 发给其他 Bot] ${text}`)
+    else if (e.role === 'user') out.push(`[用户] ${text}`)
+    else out.push(`[Bot] ${text}`)
+  }
+  return out
+}
+
+/**
  * 读事件对应会话文件的末尾，拼成给模型看的转录文本（从末尾截断到上限）。
  * 拿不到文件（dev 模拟 / 文件被清）时回落 event.detail / message。
  */
@@ -97,8 +164,17 @@ function buildTranscript(event: AgentMonitorEvent): string {
   let entries: string[] = []
   if (event.rawPath) {
     try {
-      const lines = readJsonlTail(event.rawPath, 64_000)
-      entries = event.source === 'codex' ? codexTranscript(lines) : claudeTranscript(lines)
+      if (event.source === 'grok') {
+        entries = grokTranscript(event.rawPath)
+      } else {
+        const lines = readJsonlTail(event.rawPath, 64_000)
+        entries =
+          event.source === 'codex'
+            ? codexTranscript(lines)
+            : event.source === 'cursor'
+              ? cursorTranscript(lines)
+              : claudeTranscript(lines)
+      }
     } catch {
       /* 读不到就用事件自带信息兜底 */
     }
@@ -211,8 +287,15 @@ function tidySummary(raw: string): string {
   return oneLine.slice(0, 80)
 }
 
+const AI_SOURCE_LABEL: Record<AgentMonitorEvent['source'], string> = {
+  codex: 'Codex',
+  claude: 'Claude Code',
+  cursor: 'Cursor',
+  grok: 'Grok Bot'
+}
+
 function buildUserContent(event: AgentMonitorEvent): string {
-  const who = event.source === 'codex' ? 'Codex' : 'Claude Code'
+  const who = AI_SOURCE_LABEL[event.source]
   const reason = REASON_LABEL[event.reason ?? ''] ?? '停止'
   return `助手：${who}\n停止类别：${reason}\n会话末尾记录：\n${buildTranscript(event)}`
 }

@@ -10,12 +10,20 @@ export const DEFAULT_SETTINGS: Settings = {
   bubbleAnchor: { angleDeg: 270, distance: 110 },
   // v0.3.1：单图导入默认自动去纯色背景
   autoRemoveBackground: true,
-  // v0.2 Agent 监控：两个子开关默认开启，提示音默认关闭
+  // v0.2 Agent 监控：子开关默认开启，提示音默认关闭
   codexMonitoringEnabled: true,
   claudeMonitoringEnabled: true,
+  // v0.6：Cursor 同样默认开启
+  cursorMonitoringEnabled: true,
+  // v0.6.1：Grok Bot 同样默认开启
+  grokMonitoringEnabled: true,
   // v0.3.3：默认监控全部三个环境
   codexMonitoringEnvs: ['terminal', 'vscode', 'desktop'],
   claudeMonitoringEnvs: ['terminal', 'vscode', 'desktop'],
+  // v0.6：Cursor 只有终端 / 客户端两档可监听（ACP 不落盘）
+  cursorMonitoringEnvs: ['terminal', 'desktop'],
+  // v0.6.1：Grok Bot 只有客户端一档（无 CLI / 无 IDE 插件）
+  grokMonitoringEnvs: ['desktop'],
   agentProgressBubblesEnabled: true,
   agentCompletionSoundEnabled: false,
   // v0.5 AI 总结：默认关（保持「默认不联网」），Key 留空由用户自己填

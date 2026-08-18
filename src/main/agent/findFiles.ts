@@ -21,6 +21,22 @@ export function findRecentFiles(
   maxFiles: number,
   maxDepth: number
 ): string[] {
+  return findRecentFilesAcross([root], exts, maxFiles, maxDepth)
+}
+
+/**
+ * 同 findRecentFiles，但接受多个根目录，跨所有根统一按 mtime 取最近的 maxFiles 个。
+ *
+ * 用于 Cursor：会话散在 ~/.cursor/projects/<每个工作区>/agent-transcripts 下，而同级还有
+ * terminals / agent-tools / canvases 等大量无关文件。直接从 projects 整棵树走会白扫一大片，
+ * 这里只把各工作区的 agent-transcripts 子树喂进来。
+ */
+export function findRecentFilesAcross(
+  roots: string[],
+  exts: string[],
+  maxFiles: number,
+  maxDepth: number
+): string[] {
   const found: FoundFile[] = []
 
   const walk = (dir: string, depth: number): void => {
@@ -48,7 +64,7 @@ export function findRecentFiles(
     }
   }
 
-  walk(root, 0)
+  for (const root of roots) walk(root, 0)
   found.sort((a, b) => b.mtimeMs - a.mtimeMs)
   return found.slice(0, maxFiles).map((f) => f.path)
 }
