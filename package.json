@@ -1,7 +1,7 @@
 {
   "name": "desktop-pet-mvp",
   "version": "0.1.0",
-  "description": "一个安静住在 macOS 桌面上的小伙伴（v0.1 MVP）",
+  "description": "PingPet：一个安静住在 macOS 桌面上的小伙伴。注意 name 字段不可改动（它决定 userData 目录与钥匙串条目，改了老用户的设置和 API Key 全部对不上号），对外显示名见 electron-builder.yml 的 productName。",
   "main": "./out/main/main.js",
   "author": "czy",
   "license": "MIT",

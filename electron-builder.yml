@@ -1,7 +1,15 @@
 # v0.1 内测打包配置：本地 ad-hoc 签名，不做 Developer ID 签名/公证。
 # 公开分发前需要：Apple Developer 账号 + Developer ID Application 证书 + 公证（notarize）+ stapler，详见 README。
-appId: com.example.desktoppetmvp
-productName: DesktopPetMVP
+# 对外一律叫 PingPet：产物名、App 名、菜单名、官网、GitHub release 都用它。
+#
+# ⚠️ 不要把 productName 抄到 package.json 里，也不要改 package.json 的 name。
+# Electron 的 userData 目录（~/Library/Application Support/<app.name>）取自 package.json 的
+# productName ?? name，和这里的 productName 无关。本机实测目录是 desktop-pet-mvp。
+# 一旦改动它，用户的设置、导入的皮肤包、以及 safeStorage 在钥匙串里的条目（服务名也按
+# app.name 派生）会全部对不上号——设置清零、API Key 要重填。所以内部标识保持历史值不动，
+# 只改用户看得见的名字。目录名用户永远看不到，不值得拿数据去换。
+appId: io.github.yvestiny-aipm.pingpet
+productName: PingPet
 directories:
   buildResources: build
   output: release

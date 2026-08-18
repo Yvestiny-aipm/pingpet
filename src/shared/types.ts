@@ -75,6 +75,13 @@ export interface Settings {
   aiOpenaiApiKey: string
   /** OpenAI 兼容接口的模型 ID */
   aiOpenaiModel: string
+
+  // ---- v0.6.2 新版本提醒 ----
+  /**
+   * 是否定期查一下 GitHub 上有没有新版本。
+   * 只取一个版本号，不上传任何用户信息；关掉则完全不发起这个请求。
+   */
+  updateCheckEnabled: boolean
 }
 
 /** v0.5：AI 总结的模型服务。openai = 任意 OpenAI 兼容接口（含 DeepSeek/Ollama 等） */

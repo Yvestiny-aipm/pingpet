@@ -10,6 +10,7 @@ import {
 } from '@shared/defaults'
 import { AGENT_ENVS } from '@shared/types'
 import type { AgentEnv, BubbleAnchor, PetPosition, Settings } from '@shared/types'
+import { decryptSecret, encryptSecret, isEncryptedAtRest } from './secretStore'
 
 /** 把任意输入过滤成合法的环境集合（去重、只留 terminal/vscode/desktop） */
 function sanitizeEnvs(input: unknown): AgentEnv[] | null {
@@ -26,9 +27,47 @@ function sanitizeEnvs(input: unknown): AgentEnv[] | null {
 
 const store = new Store<Settings>({ defaults: DEFAULT_SETTINGS })
 
+/** 存的是 API Key 的字段。加解密只在落盘这一层发生，进程内一律是明文 */
+const SECRET_KEYS = ['aiAnthropicApiKey', 'aiOpenaiApiKey'] as const
+
 export function getSettings(): Settings {
+  const raw = store.store as Partial<Settings>
+  // 先解密再走 sanitize：sanitizeSecret 会掐掉空白并限长，那些规则是针对明文 Key 定的，
+  // 直接套到密文上会把密文截断，读出来就永久坏了
+  const plain: Partial<Settings> = { ...raw }
+  for (const key of SECRET_KEYS) plain[key] = decryptSecret(raw[key])
   // 与默认值合并，并清洗磁盘上可能存在的旧字段/脏数据
-  return { ...DEFAULT_SETTINGS, ...sanitize(store.store) }
+  return { ...DEFAULT_SETTINGS, ...sanitize(plain) }
+}
+
+/** 落盘形态：只把 Key 换成密文，其它字段照原样 */
+function toPersisted(settings: Settings): Settings {
+  const out = { ...settings }
+  for (const key of SECRET_KEYS) out[key] = encryptSecret(settings[key])
+  return out
+}
+
+/**
+ * 把老版本留在磁盘上的明文 Key 就地加密一次。
+ *
+ * 必须在 app ready 之后调用：safeStorage 在那之前不可用，早调只会白跑一趟（而且会把
+ * 明文原样写回去）。不加密成功就不改盘，避免在不支持加密的系统上反复重写。
+ */
+export function migrateSecretsAtRest(): void {
+  const raw = store.store as Partial<Settings>
+  const needsMigration = SECRET_KEYS.some((key) => {
+    const value = raw[key]
+    return typeof value === 'string' && value !== '' && !isEncryptedAtRest(value)
+  })
+  if (!needsMigration) return
+  const settings = getSettings()
+  const persisted = toPersisted(settings)
+  // 加密没真正生效（系统不支持 / 抛错）时别写盘，否则每次启动都把明文重写一遍
+  const sealedSomething = SECRET_KEYS.some(
+    (key) => settings[key] !== '' && isEncryptedAtRest(persisted[key])
+  )
+  if (!sealedSomething) return
+  store.set(persisted)
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -146,6 +185,9 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
   if (typeof partial.aiOpenaiModel === 'string') {
     next.aiOpenaiModel = sanitizeModelId(partial.aiOpenaiModel)
   }
+  if (typeof partial.updateCheckEnabled === 'boolean') {
+    next.updateCheckEnabled = partial.updateCheckEnabled
+  }
   if (typeof partial.aiOpenaiBaseUrl === 'string') {
     const url = sanitizeAiBaseUrl(partial.aiOpenaiBaseUrl)
     if (url !== null) next.aiOpenaiBaseUrl = url
@@ -184,8 +226,8 @@ function sanitizeAiBaseUrl(value: string): string | null {
 
 export function patchSettings(partial: Partial<Settings>): Settings {
   const next = { ...getSettings(), ...sanitize(partial) }
-  store.set(next)
-  return next
+  store.set(toPersisted(next))
+  return next // 返回明文：调用方（AI 总结、设置界面）要的是能直接用的 Key
 }
 
 export function getStorePath(): string {

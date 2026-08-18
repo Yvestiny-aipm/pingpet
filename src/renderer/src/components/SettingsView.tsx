@@ -742,7 +742,7 @@ export default function SettingsView(): JSX.Element {
           <>
             <header className="panel-head">
               <h2>关于</h2>
-              <p>DesktopPetMVP v{appVersion}</p>
+              <p>PingPet v{appVersion}</p>
             </header>
 
             <div className="about-hero">
@@ -750,8 +750,26 @@ export default function SettingsView(): JSX.Element {
                 {selectedPet && <PetSprite pet={selectedPet} state="happy" />}
               </div>
               <p>一个安静住在桌面上的小伙伴。</p>
-              <p className="hint-text--muted">所有设置自动保存在本机，不联网。</p>
+              <p className="hint-text--muted">
+                所有设置和 API Key 都只保存在本机。默认只有下面的更新检查会联网，AI 总结要你自己开。
+              </p>
             </div>
+
+            <div className="field-card">
+              <label className="field-row">
+                <span className="field-label">检查新版本</span>
+                <input
+                  type="checkbox"
+                  className="switch"
+                  checked={settings.updateCheckEnabled}
+                  onChange={(e) => patch({ updateCheckEnabled: e.target.checked })}
+                />
+              </label>
+            </div>
+            <p className="hint-text">
+              开启后每天查一次有没有新版本，发现了会弹个气泡、并在菜单栏图标里留一个下载入口。
+              只向 GitHub 取一个版本号，不上传任何关于你的信息。
+            </p>
 
             <div className="field-card">
               <div className="field-row field-row--buttons">

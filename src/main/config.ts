@@ -1,5 +1,14 @@
 /** 气泡文案与节奏常量。v0.1 全部本地，无任何网络请求。 */
 
+/**
+ * 对外的产品名。
+ *
+ * 不用 app.name：它取自 package.json 的 name（desktop-pet-mvp），而那个值和
+ * userData 目录、钥匙串条目绑在一起，为了不丢用户数据必须保持历史值不动。
+ * 所以显示名单独写在这里，别再改回 app.name。
+ */
+export const APP_NAME = 'PingPet'
+
 /** 闲时陪伴文案（安静、简短） */
 export const IDLE_BUBBLE_LINES: readonly string[] = [
   '我在这儿。',

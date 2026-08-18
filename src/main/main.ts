@@ -1,5 +1,5 @@
 import { appendFileSync } from 'node:fs'
-import { app, BrowserWindow, ipcMain, Menu, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, screen, shell } from 'electron'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { FALLBACK_PET_ID } from '@shared/pets'
 import { getPetCatalog, findPetInCatalog } from './petPacks/catalog'
@@ -33,9 +33,13 @@ import {
   AGENT_AI_BUBBLE_MS,
   AGENT_TERMINAL_BUBBLE_MS,
   AGENT_TERMINAL_COALESCE_MS,
-  AGENT_THINKING_STATE_MS
+  AGENT_THINKING_STATE_MS,
+  UPDATE_BUBBLE_MS,
+  UPDATE_CHECK_INTERVAL_MS,
+  UPDATE_CHECK_STARTUP_DELAY_MS
 } from '@shared/defaults'
 import {
+  APP_NAME,
   buildAgentBubbleHead,
   buildAgentBubbleText,
   BUBBLE_DURATION_MS,
@@ -46,7 +50,9 @@ import {
 } from './config'
 import { AgentMonitor } from './agent/monitor'
 import { summarizeAgentStop, testAiSummary } from './ai/summarize'
-import { getSettings, patchSettings } from './store'
+import { getSettings, migrateSecretsAtRest, patchSettings } from './store'
+import { checkForUpdate } from './update'
+import type { UpdateInfo } from './update'
 import { clampToWorkArea, createPetWindow, createSettingsWindow, defaultPetPosition } from './windows'
 import { createTray, refreshTrayMenu } from './tray'
 
@@ -384,6 +390,60 @@ function syncAgentMonitor(): void {
   }
 }
 
+// ---------- v0.6.2 新版本提醒 ----------
+
+/** 已发现但用户还没去下载的新版本。托盘菜单据此决定是否显示下载入口 */
+let pendingUpdate: UpdateInfo | null = null
+let updateStartupTimer: ReturnType<typeof setTimeout> | null = null
+let updateIntervalTimer: ReturnType<typeof setInterval> | null = null
+
+function openUpdatePage(): void {
+  if (!pendingUpdate) return
+  void shell.openExternal(pendingUpdate.url)
+}
+
+async function runUpdateCheck(): Promise<void> {
+  if (!getSettings().updateCheckEnabled) return
+  const found = await checkForUpdate(app.getVersion())
+  if (!found) return
+  // 同一个版本只提醒一次气泡：托盘入口会一直留着，不需要反复弹
+  const alreadyKnown = pendingUpdate?.version === found.version
+  pendingUpdate = found
+  refreshTrayMenu()
+  if (alreadyKnown) return
+  sendBubble(
+    `有新版本 v${found.version} 了，在菜单栏图标里可以下载～`,
+    'happy',
+    UPDATE_BUBBLE_MS,
+    false,
+    // interactive=true 是「别被 Agent 的思考态顶掉」的意思（不是可点击）。
+    // 这条气泡只弹一次，被每秒轮询的 working 事件秒掉就等于没提醒过。
+    true
+  )
+}
+
+function scheduleUpdateChecks(): void {
+  stopUpdateChecks()
+  if (!getSettings().updateCheckEnabled) return
+  updateStartupTimer = setTimeout(() => {
+    void runUpdateCheck()
+  }, UPDATE_CHECK_STARTUP_DELAY_MS)
+  updateIntervalTimer = setInterval(() => {
+    void runUpdateCheck()
+  }, UPDATE_CHECK_INTERVAL_MS)
+}
+
+function stopUpdateChecks(): void {
+  if (updateStartupTimer) {
+    clearTimeout(updateStartupTimer)
+    updateStartupTimer = null
+  }
+  if (updateIntervalTimer) {
+    clearInterval(updateIntervalTimer)
+    updateIntervalTimer = null
+  }
+}
+
 // ---------- 设置与副作用 ----------
 
 function applySettings(partial: Partial<Settings>): Snapshot {
@@ -432,6 +492,16 @@ function applySettings(partial: Partial<Settings>): Snapshot {
     JSON.stringify(before.grokMonitoringEnvs) !== JSON.stringify(next.grokMonitoringEnvs)
   ) {
     syncAgentMonitor()
+  }
+  // 用户在设置里开/关更新检查：立刻生效，关掉就不该再有任何网络请求
+  if (before.updateCheckEnabled !== next.updateCheckEnabled) {
+    if (next.updateCheckEnabled) {
+      scheduleUpdateChecks()
+    } else {
+      stopUpdateChecks()
+      pendingUpdate = null // 连托盘里的下载入口一起撤掉，保持「关了就当没这功能」
+      refreshTrayMenu()
+    }
   }
   broadcastSnapshot()
   return buildSnapshot()
@@ -542,7 +612,7 @@ function refreshDockMenu(): void {
 function installApplicationMenu(): void {
   const menu = Menu.buildFromTemplate([
     {
-      label: app.name,
+      label: APP_NAME,
       submenu: [
         { label: '设置…', accelerator: 'Command+,', click: openSettings },
         { label: getSettings().petVisible ? '隐藏桌宠' : '显示桌宠', click: () => applySettings({ petVisible: !getSettings().petVisible }) },
@@ -831,6 +901,9 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     debugLaunch('app ready')
+    // 老版本把 API Key 明文存在 config.json 里，就地加密一次。
+    // 必须放在 ready 之后：safeStorage 在那之前不可用。
+    migrateSecretsAtRest()
     registerIpc()
 
     // v0.4：冷启动时命令行里可能带 deskpet:// URL（Windows/Linux；macOS 走 open-url）
@@ -858,7 +931,9 @@ if (!app.requestSingleInstanceLock()) {
       },
       openSettings,
       resetPosition: resetPetPosition,
-      quit
+      quit,
+      pendingUpdateVersion: () => pendingUpdate?.version ?? null,
+      openUpdatePage
     })
     debugLaunch('tray created')
     installApplicationMenu()
@@ -873,6 +948,9 @@ if (!app.requestSingleInstanceLock()) {
     syncAgentMonitor()
     agentMonitor?.start()
     debugLaunch('agent monitor started')
+
+    // v0.6.2：新版本提醒
+    scheduleUpdateChecks()
   })
 
   // 托盘应用：设置窗口关掉、宠物隐藏时也要常驻
@@ -885,6 +963,7 @@ if (!app.requestSingleInstanceLock()) {
       clearTimeout(bubbleTimer)
       bubbleTimer = null
     }
+    stopUpdateChecks()
     agentMonitor?.stop()
     if (petWindow && !petWindow.isDestroyed() && petWindow.isVisible()) {
       savePetPosition(false)
