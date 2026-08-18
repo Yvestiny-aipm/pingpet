@@ -84,7 +84,7 @@ PingPet 兼容 [PetDex](https://petdex.dev)（开放的社区桌宠形象库，`
 - **系统要求**：macOS（Apple Silicon / arm64）
 - **下载**：[PingPet-macOS-arm64.dmg](https://github.com/Yvestiny-aipm/pingpet/releases/latest/download/PingPet-macOS-arm64.dmg)（Releases 里永远指向最新版）
 - **首次打开**：安装包目前是本地 ad-hoc 签名、未做 Apple 公证，Gatekeeper 可能拦一下——对着 App **右键 →「打开」**，或到「系统设置 → 隐私与安全性」里放行即可
-- 小提示：品牌改名进行中，安装后的应用名暂显示为 `DesktopPetMVP`，功能不受影响
+- **更新**：开着「检查新版本」的话，有新版会弹个气泡提醒，并在菜单栏图标里留一个下载入口。暂时还不能一键静默更新——那需要 Apple Developer ID 证书签名后 Squirrel 才肯装
 
 ## 开发
 

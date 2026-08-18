@@ -35,5 +35,8 @@ mac:
   identity: null
 afterPack: scripts/adhoc-sign-mac.cjs
 dmg:
-  artifactName: ${productName}-${version}.${ext}
+  # 文件名不带版本号：README 和官网给的是 releases/latest/download/PingPet-macOS-arm64.dmg
+  # 这种「永远指向最新版」的固定地址，只要产物名和它对不上，每次发版都得手动改名，
+  # 忘一次那个链接就 404。让构建直接产出正确的名字。
+  artifactName: ${productName}-macOS-${arch}.${ext}
 npmRebuild: false
