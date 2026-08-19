@@ -1,6 +1,7 @@
 import { appendFileSync } from 'node:fs'
 import { app, BrowserWindow, ipcMain, Menu, screen, shell } from 'electron'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
+import { AGENT_SOURCE_IDS, AGENT_SOURCE_LIST } from '@shared/agents'
 import { FALLBACK_PET_ID } from '@shared/pets'
 import { getPetCatalog, findPetInCatalog } from './petPacks/catalog'
 import {
@@ -49,6 +50,7 @@ import {
   IDLE_BUBBLE_LINES
 } from './config'
 import { AgentMonitor } from './agent/monitor'
+import type { MonitorConfig } from './agent/monitor'
 import { summarizeAgentStop, testAiSummary } from './ai/summarize'
 import { getSettings, migrateSecretsAtRest, patchSettings } from './store'
 import { checkForUpdate } from './update'
@@ -353,11 +355,7 @@ function agentStatus(): AgentMonitorStatus {
   if (agentMonitor) return agentMonitor.getStatus()
   const s = getSettings()
   return {
-    enabled:
-      s.codexMonitoringEnabled ||
-      s.claudeMonitoringEnabled ||
-      s.cursorMonitoringEnabled ||
-      s.grokMonitoringEnabled,
+    enabled: AGENT_SOURCE_LIST.some((meta) => s[meta.enabledKey]),
     lastEvent: null,
     activeSessions: [],
     lastCheckedAt: null,
@@ -365,19 +363,22 @@ function agentStatus(): AgentMonitorStatus {
   }
 }
 
+/**
+ * 把设置翻译成 monitor 的配置。遍历 AGENT_SOURCES 登记处，加一家 Agent 不用改这里。
+ * 用一次 as：Record 的键靠循环填，TS 没法在填完前认定它完整；覆盖性由
+ * shared/agents.test.ts 断言（AGENT_SOURCE_LIST 覆盖 AgentSource 每一项）。
+ */
+function monitorConfigFromSettings(s: Settings): MonitorConfig {
+  const config = {} as MonitorConfig
+  for (const meta of AGENT_SOURCE_LIST) {
+    config[meta.source] = { enabled: s[meta.enabledKey], envs: s[meta.envsKey] }
+  }
+  return config
+}
+
 /** 按当前设置启动 / 重启 monitor */
 function syncAgentMonitor(): void {
-  const s = getSettings()
-  const config = {
-    codexEnabled: s.codexMonitoringEnabled,
-    claudeEnabled: s.claudeMonitoringEnabled,
-    cursorEnabled: s.cursorMonitoringEnabled,
-    grokEnabled: s.grokMonitoringEnabled,
-    codexEnvs: s.codexMonitoringEnvs,
-    claudeEnvs: s.claudeMonitoringEnvs,
-    cursorEnvs: s.cursorMonitoringEnvs,
-    grokEnvs: s.grokMonitoringEnvs
-  }
+  const config = monitorConfigFromSettings(getSettings())
   if (!agentMonitor) {
     agentMonitor = new AgentMonitor(config, {
       now: () => Date.now(),
@@ -480,19 +481,13 @@ function applySettings(partial: Partial<Settings>): Snapshot {
       patchSettings({ petPosition: clamped })
     }
   }
-  // Agent 监控子开关 / 环境集合变化时重启 monitor
-  if (
-    before.codexMonitoringEnabled !== next.codexMonitoringEnabled ||
-    before.claudeMonitoringEnabled !== next.claudeMonitoringEnabled ||
-    before.cursorMonitoringEnabled !== next.cursorMonitoringEnabled ||
-    before.grokMonitoringEnabled !== next.grokMonitoringEnabled ||
-    JSON.stringify(before.codexMonitoringEnvs) !== JSON.stringify(next.codexMonitoringEnvs) ||
-    JSON.stringify(before.claudeMonitoringEnvs) !== JSON.stringify(next.claudeMonitoringEnvs) ||
-    JSON.stringify(before.cursorMonitoringEnvs) !== JSON.stringify(next.cursorMonitoringEnvs) ||
-    JSON.stringify(before.grokMonitoringEnvs) !== JSON.stringify(next.grokMonitoringEnvs)
-  ) {
-    syncAgentMonitor()
-  }
+  // Agent 监控开关 / 环境集合变化时重启 monitor
+  const monitoringChanged = AGENT_SOURCE_LIST.some(
+    (meta) =>
+      before[meta.enabledKey] !== next[meta.enabledKey] ||
+      JSON.stringify(before[meta.envsKey]) !== JSON.stringify(next[meta.envsKey])
+  )
+  if (monitoringChanged) syncAgentMonitor()
   // 用户在设置里开/关更新检查：立刻生效，关掉就不该再有任何网络请求
   if (before.updateCheckEnabled !== next.updateCheckEnabled) {
     if (next.updateCheckEnabled) {
@@ -817,9 +812,8 @@ function registerIpc(): void {
   ipcMain.on(IPC.AgentSimulate, (event, source: unknown, kind: unknown) => {
     if (!isTrustedSender(event)) return
     if (app.isPackaged) return // 打包环境不提供模拟
-    const validSources: AgentSource[] = ['codex', 'claude', 'cursor', 'grok']
     const validKinds: AgentEventKind[] = ['working', 'done', 'needs_attention', 'failed']
-    if (!validSources.includes(source as AgentSource)) return
+    if (!AGENT_SOURCE_IDS.includes(source as AgentSource)) return
     if (!validKinds.includes(kind as AgentEventKind)) return
     if (!agentMonitor) syncAgentMonitor()
     const k = kind as AgentEventKind

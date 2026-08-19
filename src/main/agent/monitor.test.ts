@@ -17,15 +17,13 @@ beforeAll(() => {
   process.env.HOME = mkdtempSync(join(tmpdir(), 'pet-monitor-test-'))
 })
 
+const OFF = { enabled: false, envs: [] }
+
 const CONFIG: MonitorConfig = {
-  codexEnabled: true,
-  claudeEnabled: false,
-  cursorEnabled: false,
-  grokEnabled: false,
-  codexEnvs: ['terminal'],
-  claudeEnvs: [],
-  cursorEnvs: [],
-  grokEnvs: []
+  codex: { enabled: true, envs: ['terminal'] },
+  claude: OFF,
+  cursor: OFF,
+  grok: OFF
 }
 
 let clock = 1_700_000_000_000
@@ -134,16 +132,7 @@ describe('dev 模拟（fromScan=false）', () => {
 describe('运行状态', () => {
   it('四家全不监控时 enabled 为 false（纯陪伴模式，不起轮询）', () => {
     const idle = new AgentMonitor(
-      {
-        codexEnabled: false,
-        claudeEnabled: false,
-        cursorEnabled: false,
-        grokEnabled: false,
-        codexEnvs: [],
-        claudeEnvs: [],
-        cursorEnvs: [],
-        grokEnvs: []
-      },
+      { codex: OFF, claude: OFF, cursor: OFF, grok: OFF },
       { now: () => clock, onEvent: () => {} }
     )
     expect(idle.getStatus().enabled).toBe(false)
@@ -151,7 +140,7 @@ describe('运行状态', () => {
 
   it('开关开着但环境集合为空，等于不监控', () => {
     const noEnv = new AgentMonitor(
-      { ...CONFIG, codexEnvs: [] },
+      { ...CONFIG, codex: { enabled: true, envs: [] } },
       { now: () => clock, onEvent: () => {} }
     )
     expect(noEnv.getStatus().enabled).toBe(false)

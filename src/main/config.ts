@@ -33,18 +33,14 @@ export const CLICK_BUBBLE_LINES: readonly string[] = [
 /** 气泡展示时长（毫秒），到点自动消失 */
 export const BUBBLE_DURATION_MS = 5000
 
+import { AGENT_SOURCES } from '@shared/agents'
 import type { AgentMonitorEvent, AgentSource, AgentStopReason } from '@shared/types'
 
 /**
  * v0.2.1：Agent 只在「停下来」时弹气泡，且气泡要说清「为什么停」。
  * 文案 = 来源名 + 停止原因短语（+ 可选细节）。working 不再弹气泡。
  */
-const SOURCE_NAME: Record<AgentSource, string> = {
-  codex: 'Codex',
-  claude: 'Claude Code',
-  cursor: 'Cursor',
-  grok: 'Grok Bot'
-}
+const SOURCE_NAME = (source: AgentSource): string => AGENT_SOURCES[source].label
 
 /** 每种停止原因对应一句主文案（不含来源名和细节） */
 const STOP_REASON_PHRASE: Record<AgentStopReason, string> = {
@@ -71,7 +67,7 @@ function effectiveReason(event: AgentMonitorEvent): AgentStopReason {
  * AI 总结只替换第二行细节，不改动这行的事实性结论。
  */
 export function buildAgentBubbleHead(event: AgentMonitorEvent): string {
-  return `${SOURCE_NAME[event.source]} ${STOP_REASON_PHRASE[effectiveReason(event)]}`
+  return `${SOURCE_NAME(event.source)} ${STOP_REASON_PHRASE[effectiveReason(event)]}`
 }
 
 /**

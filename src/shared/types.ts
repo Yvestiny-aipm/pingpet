@@ -12,8 +12,35 @@ export interface BubbleAnchor {
   distance: number
 }
 
+/**
+ * 每家 Agent 在 Settings 里对应的两个字段名，由 AgentSource 自动派生。
+ *
+ * v0.2 起这两组字段是手写的（codexMonitoringEnabled、claudeMonitoringEnvs…），
+ * 结果每加一家 Agent 都要在 8 个地方补字段，漏一个不会报错、只是那家静默失效。
+ * 改成映射类型后，AgentSource 里加一项，缺的字段会直接编译不过。
+ */
+export type MonitoringEnabledKey<S extends AgentSource = AgentSource> = `${S}MonitoringEnabled`
+export type MonitoringEnvsKey<S extends AgentSource = AgentSource> = `${S}MonitoringEnvs`
+
+/**
+ * Agent 监控相关的设置字段。
+ *
+ * enabled：是否监控这家。
+ * envs   ：监控它的哪些环境（终端 / VS Code / 客户端），可多选。
+ *          开关开着但环境是空数组 = 该家实际不监控（等于关）。
+ *          每家真正可选的环境见 AGENT_SOURCES 里的 envs——不是「产品有几个入口」，
+ *          而是「哪些入口会在本地留下可读的会话文件」。
+ *
+ * v0.3.3 起没有总开关：全部关掉 = 不监控（纯陪伴桌宠）。
+ */
+export type AgentMonitoringSettings = {
+  [S in AgentSource as MonitoringEnabledKey<S>]: boolean
+} & {
+  [S in AgentSource as MonitoringEnvsKey<S>]: AgentEnv[]
+}
+
 /** 本地持久化的全部设置 */
-export interface Settings {
+export interface Settings extends AgentMonitoringSettings {
   selectedPetId: string
   petScale: number
   bubblesEnabled: boolean
@@ -28,27 +55,6 @@ export interface Settings {
    */
   autoRemoveBackground: boolean
 
-  // ---- v0.2 Agent 监控开关 ----
-  // v0.3.3：删除「总开关」。监控能力内置默认开启，靠下面两个子开关决定盯谁；
-  // 两个子开关都关 = 不监控（纯陪伴桌宠）。
-  /** 是否监控 Codex 会话 */
-  codexMonitoringEnabled: boolean
-  /** 是否监控 Claude Code 会话 */
-  claudeMonitoringEnabled: boolean
-  /** v0.6：是否监控 Cursor 会话 */
-  cursorMonitoringEnabled: boolean
-  /** v0.6.1：是否监控 Grok Bot 会话 */
-  grokMonitoringEnabled: boolean
-  // v0.3.3：每家监控哪些环境（终端 / VS Code / 客户端），可多选；
-  // 开关开着但环境空数组 = 该家实际不监控。默认全选三个环境。
-  /** Codex 监控的环境集合 */
-  codexMonitoringEnvs: AgentEnv[]
-  /** Claude Code 监控的环境集合 */
-  claudeMonitoringEnvs: AgentEnv[]
-  /** v0.6：Cursor 监控的环境集合（只有 terminal / desktop 有效，见 AGENT_SOURCE_ENVS） */
-  cursorMonitoringEnvs: AgentEnv[]
-  /** v0.6.1：Grok Bot 监控的环境集合（只有 desktop 有效，见 AGENT_SOURCE_ENVS） */
-  grokMonitoringEnvs: AgentEnv[]
   /**
    * @deprecated v0.2.1 起 working 不再弹气泡（只切思考视觉），此开关已无效果。
    * 字段保留仅为兼容旧存盘 / 避免 sanitize 丢字段，UI 已移除。
@@ -112,25 +118,6 @@ export type AgentEnv = 'terminal' | 'vscode' | 'desktop'
 
 /** v0.3.3：三个环境的固定顺序 + 展示名（渲染层复用） */
 export const AGENT_ENVS: readonly AgentEnv[] = ['terminal', 'vscode', 'desktop'] as const
-
-/**
- * v0.6：每家实际**能被监听到**的环境集合。
- *
- * Cursor 少一个 vscode：Cursor 官方不出 VS Code 扩展（它自己就是 VS Code 的 fork），
- * 在 VS Code 里用 Cursor 只能走 ACP（`agent acp`）。实测 ACP 会话只建 project 目录、
- * 写 worker.log / repo.json，**完全不写 agent-transcripts JSONL**，文件监听拿不到任何事件。
- * 因此该档不提供勾选，避免做出一个永远不触发的假开关。
- *
- * v0.6.1：Grok Bot 只有 desktop。它官方就只出 macOS / Windows 桌面端和 iOS App，
- * 没有 CLI 也没有 IDE 插件。手机端派的活会同步到桌面端的同一份本地文件，
- * 所以开着客户端就等于把 iOS 那边也覆盖了。
- */
-export const AGENT_SOURCE_ENVS: Record<AgentSource, readonly AgentEnv[]> = {
-  codex: ['terminal', 'vscode', 'desktop'],
-  claude: ['terminal', 'vscode', 'desktop'],
-  cursor: ['terminal', 'desktop'],
-  grok: ['desktop']
-}
 
 /** v0.2：Agent 会话状态四分类 */
 export type AgentEventKind = 'working' | 'done' | 'needs_attention' | 'failed'

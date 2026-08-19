@@ -8,6 +8,7 @@ import {
   PET_SCALE_MAX,
   PET_SCALE_MIN
 } from '@shared/defaults'
+import { AGENT_SOURCE_LIST } from '@shared/agents'
 import { AGENT_ENVS } from '@shared/types'
 import type { AgentEnv, BubbleAnchor, PetPosition, Settings } from '@shared/types'
 import { decryptSecret, encryptSecret, isEncryptedAtRest } from './secretStore'
@@ -131,31 +132,15 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
     const anchor = sanitizeBubbleAnchor(partial.bubbleAnchor)
     if (anchor) next.bubbleAnchor = anchor
   }
-  // v0.2 Agent 监控开关：逐个白名单校验，漏一个就会静默丢盘。
+  // Agent 监控的开关与环境集合：遍历 AGENT_SOURCES 登记处，加一家不用改这里。
+  // 以前是逐个手写白名单，漏一个不会报错、只是那家的选择静默存不进去。
   // v0.3.3：总开关 agentMonitoringEnabled 已删除；旧存盘里若还残留该字段，
-  // 这里不再放行，合并时被自动丢弃，监控回到「看两个子开关」。
-  if (typeof partial.codexMonitoringEnabled === 'boolean') {
-    next.codexMonitoringEnabled = partial.codexMonitoringEnabled
-  }
-  if (typeof partial.claudeMonitoringEnabled === 'boolean') {
-    next.claudeMonitoringEnabled = partial.claudeMonitoringEnabled
-  }
-  if (typeof partial.cursorMonitoringEnabled === 'boolean') {
-    next.cursorMonitoringEnabled = partial.cursorMonitoringEnabled
-  }
-  if (typeof partial.grokMonitoringEnabled === 'boolean') {
-    next.grokMonitoringEnabled = partial.grokMonitoringEnabled
-  }
-  // v0.3.3：每家监控的环境集合（过滤成合法值）
-  {
-    const codexEnvs = sanitizeEnvs(partial.codexMonitoringEnvs)
-    if (codexEnvs) next.codexMonitoringEnvs = codexEnvs
-    const claudeEnvs = sanitizeEnvs(partial.claudeMonitoringEnvs)
-    if (claudeEnvs) next.claudeMonitoringEnvs = claudeEnvs
-    const cursorEnvs = sanitizeEnvs(partial.cursorMonitoringEnvs)
-    if (cursorEnvs) next.cursorMonitoringEnvs = cursorEnvs
-    const grokEnvs = sanitizeEnvs(partial.grokMonitoringEnvs)
-    if (grokEnvs) next.grokMonitoringEnvs = grokEnvs
+  // 这里不放行，合并时被自动丢弃。
+  for (const meta of AGENT_SOURCE_LIST) {
+    const enabled = partial[meta.enabledKey]
+    if (typeof enabled === 'boolean') next[meta.enabledKey] = enabled
+    const envs = sanitizeEnvs(partial[meta.envsKey])
+    if (envs) next[meta.envsKey] = envs
   }
   if (typeof partial.agentProgressBubblesEnabled === 'boolean') {
     next.agentProgressBubblesEnabled = partial.agentProgressBubblesEnabled

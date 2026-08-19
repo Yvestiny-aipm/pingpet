@@ -6,6 +6,7 @@ import {
   AI_SUMMARY_TIMEOUT_MS,
   AI_TRANSCRIPT_MAX_CHARS
 } from '@shared/defaults'
+import { AGENT_SOURCES } from '@shared/agents'
 import type { AgentMonitorEvent, AiTestResult, Settings } from '@shared/types'
 import { readJsonlTail } from '../agent/readJsonl'
 
@@ -287,15 +288,8 @@ function tidySummary(raw: string): string {
   return oneLine.slice(0, 80)
 }
 
-const AI_SOURCE_LABEL: Record<AgentMonitorEvent['source'], string> = {
-  codex: 'Codex',
-  claude: 'Claude Code',
-  cursor: 'Cursor',
-  grok: 'Grok Bot'
-}
-
 function buildUserContent(event: AgentMonitorEvent): string {
-  const who = AI_SOURCE_LABEL[event.source]
+  const who = AGENT_SOURCES[event.source].label
   const reason = REASON_LABEL[event.reason ?? ''] ?? '停止'
   return `助手：${who}\n停止类别：${reason}\n会话末尾记录：\n${buildTranscript(event)}`
 }

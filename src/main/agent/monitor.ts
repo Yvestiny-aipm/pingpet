@@ -11,33 +11,25 @@ import type {
   AgentMonitorStatus,
   AgentSource
 } from '@shared/types'
-import { scanClaude } from './claude'
-import { scanCodex } from './codex'
-import { scanCursor } from './cursor'
-import { scanGrok } from './grok'
+import { AGENT_SOURCE_IDS } from '@shared/agents'
+import { AGENT_SCANNERS } from './scanners'
+
+/** 单家 Agent 的监控配置 */
+export interface AgentSourceConfig {
+  enabled: boolean
+  /** 监控哪些环境（terminal/vscode/desktop）；空集 = 该家不监控（等于关） */
+  envs: AgentEnv[]
+}
 
 /**
  * monitor 对外配置：从当前设置读取，设置变化时整体重启。
- * v0.3.3：去掉总开关；每家一个开关 + 一个环境集合。
- * 某家开关开、但该家环境集合为空 = 该家不监控（等于关）。
- * 两家都不监控 = 完全不轮询（纯陪伴）。
+ *
+ * v0.3.3 去掉了总开关：每家一个开关 + 一个环境集合，某家开关开但环境集合为空 = 那家不监控。
+ * 全部都不监控 = 完全不轮询（纯陪伴）。
+ *
+ * v0.6.2 由四组手写字段改成按来源索引，这样加一家 Agent 不用再动 monitor 一行。
  */
-export interface MonitorConfig {
-  codexEnabled: boolean
-  claudeEnabled: boolean
-  /** v0.6：是否监控 Cursor */
-  cursorEnabled: boolean
-  /** v0.6.1：是否监控 Grok Bot */
-  grokEnabled: boolean
-  /** Codex 监控哪些环境（terminal/vscode/desktop）；空集=不监控 codex */
-  codexEnvs: AgentEnv[]
-  /** Claude Code 监控哪些环境；空集=不监控 claude */
-  claudeEnvs: AgentEnv[]
-  /** v0.6：Cursor 监控哪些环境（只有 terminal/desktop 有效）；空集=不监控 cursor */
-  cursorEnvs: AgentEnv[]
-  /** v0.6.1：Grok Bot 监控哪些环境（只有 desktop 有效）；空集=不监控 grok */
-  grokEnvs: AgentEnv[]
-}
+export type MonitorConfig = Record<AgentSource, AgentSourceConfig>
 
 /** monitor 依赖注入：时间源可注入以便测试；事件回调交给 main 派发副作用 */
 export interface MonitorDeps {
@@ -89,29 +81,15 @@ export class AgentMonitor {
     this.deps = deps
   }
 
-  /** codex 是否真的在监控：开关开 且 至少选了一个环境 */
-  private codexActive(): boolean {
-    return this.config.codexEnabled && this.config.codexEnvs.length > 0
-  }
-
-  /** claude 是否真的在监控：开关开 且 至少选了一个环境 */
-  private claudeActive(): boolean {
-    return this.config.claudeEnabled && this.config.claudeEnvs.length > 0
-  }
-
-  /** cursor 是否真的在监控：开关开 且 至少选了一个环境 */
-  private cursorActive(): boolean {
-    return this.config.cursorEnabled && this.config.cursorEnvs.length > 0
-  }
-
-  /** grok 是否真的在监控：开关开 且 至少选了一个环境 */
-  private grokActive(): boolean {
-    return this.config.grokEnabled && this.config.grokEnvs.length > 0
+  /** 某家是否真的在监控：开关开 且 至少选了一个环境 */
+  private isActive(source: AgentSource): boolean {
+    const c = this.config[source]
+    return c.enabled && c.envs.length > 0
   }
 
   /** 有没有任何一家在监控 */
   private anyActive(): boolean {
-    return this.codexActive() || this.claudeActive() || this.cursorActive() || this.grokActive()
+    return AGENT_SOURCE_IDS.some((source) => this.isActive(source))
   }
 
   start(): void {
@@ -153,13 +131,7 @@ export class AgentMonitor {
 
   /** 事件是否通过「按环境」过滤：看它所属 source 的环境集合是否包含它的 env */
   private passesEnvFilter(e: AgentMonitorEvent): boolean {
-    const envsBySource: Record<AgentSource, AgentEnv[]> = {
-      codex: this.config.codexEnvs,
-      claude: this.config.claudeEnvs,
-      cursor: this.config.cursorEnvs,
-      grok: this.config.grokEnvs
-    }
-    return envsBySource[e.source].includes(e.env)
+    return this.config[e.source].envs.includes(e.env)
   }
 
   /**
@@ -230,10 +202,9 @@ export class AgentMonitor {
 
     try {
       const events: AgentMonitorEvent[] = []
-      if (this.codexActive()) events.push(...scanCodex(now))
-      if (this.claudeActive()) events.push(...scanClaude(now))
-      if (this.cursorActive()) events.push(...scanCursor(now))
-      if (this.grokActive()) events.push(...scanGrok(now))
+      for (const source of AGENT_SOURCE_IDS) {
+        if (this.isActive(source)) events.push(...AGENT_SCANNERS[source](now))
+      }
 
       // 只处理最近 AGENT_EVENT_FRESH_MS 内、且通过「按环境过滤」的事件（老日志/未勾选的环境忽略）。
       // 时间戳缺失(=now)的会被保留，靠 seenIds 去重防重复。

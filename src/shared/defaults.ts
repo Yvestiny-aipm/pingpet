@@ -1,6 +1,23 @@
-import type { Settings } from './types'
+import { AGENT_SOURCE_LIST } from './agents'
+import type { AgentMonitoringSettings, Settings } from './types'
+
+/**
+ * 四家监控的默认值，从 AGENT_SOURCES 登记处生成，不再手写。
+ *
+ * 这里用一次 as：Record 的键要靠循环填，TS 没法在填完前认定它是完整的。
+ * 安全性由 agents.test.ts 兜住——它会断言每一家在 DEFAULT_SETTINGS 里都有这两个字段。
+ */
+function agentMonitoringDefaults(): AgentMonitoringSettings {
+  const out = {} as Record<string, unknown>
+  for (const meta of AGENT_SOURCE_LIST) {
+    out[meta.enabledKey] = meta.defaultEnabled
+    out[meta.envsKey] = [...meta.defaultEnvs]
+  }
+  return out as AgentMonitoringSettings
+}
 
 export const DEFAULT_SETTINGS: Settings = {
+  ...agentMonitoringDefaults(),
   selectedPetId: 'dango',
   petScale: 1,
   bubblesEnabled: true,
@@ -10,20 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   bubbleAnchor: { angleDeg: 270, distance: 110 },
   // v0.3.1：单图导入默认自动去纯色背景
   autoRemoveBackground: true,
-  // v0.2 Agent 监控：子开关默认开启，提示音默认关闭
-  codexMonitoringEnabled: true,
-  claudeMonitoringEnabled: true,
-  // v0.6：Cursor 同样默认开启
-  cursorMonitoringEnabled: true,
-  // v0.6.1：Grok Bot 同样默认开启
-  grokMonitoringEnabled: true,
-  // v0.3.3：默认监控全部三个环境
-  codexMonitoringEnvs: ['terminal', 'vscode', 'desktop'],
-  claudeMonitoringEnvs: ['terminal', 'vscode', 'desktop'],
-  // v0.6：Cursor 只有终端 / 客户端两档可监听（ACP 不落盘）
-  cursorMonitoringEnvs: ['terminal', 'desktop'],
-  // v0.6.1：Grok Bot 只有客户端一档（无 CLI / 无 IDE 插件）
-  grokMonitoringEnvs: ['desktop'],
+  // Agent 监控的默认值见上面的 agentMonitoringDefaults（来自 AGENT_SOURCES 登记处）
   agentProgressBubblesEnabled: true,
   agentCompletionSoundEnabled: false,
   // v0.5 AI 总结：默认关（保持「默认不联网」），Key 留空由用户自己填
