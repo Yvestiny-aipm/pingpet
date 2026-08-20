@@ -90,10 +90,16 @@ PingPet 兼容 [PetDex](https://petdex.dev)（开放的社区桌宠形象库，`
 
 ```bash
 pnpm install
-pnpm dev        # 开发模式（HMR）
-pnpm build      # 类型检查 + 产物构建（out/）
-pnpm dist:mac   # 打包 macOS DMG + ZIP（release/）
+pnpm dev         # 开发模式（HMR）
+pnpm test        # 回归测试（vitest）
+pnpm build       # 类型检查 + 产物构建（out/）
+pnpm dist:mac    # 打包 macOS DMG + ZIP（release/）
+pnpm release:mac # 发版：跑测试 → 打包 → 打 tag → 建 GitHub release
 ```
+
+发版只改 `package.json` 的 `version`，git tag 和 release 的 tag 都由脚本从它派生。
+三者一旦不一致，「检查新版本」会静默失灵（tag 比 App 内版本号新 → 装了最新版的用户
+被无限提醒；反过来 → 真发了新版也没人收到），所以不要手敲 tag。
 
 **技术栈**：Electron 33 · electron-vite 3 · React 18 · TypeScript · electron-store · electron-builder · pnpm
 
