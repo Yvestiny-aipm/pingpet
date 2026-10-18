@@ -1,0 +1,8 @@
+{"type":"thread.started","thread_id":"thread-redacted"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item-error","type":"error"}}
+{"type":"item.completed","item":{"id":"item-msg-1","type":"agent_message"}}
+{"type":"item.started","item":{"id":"item-cmd","type":"command_execution","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item-cmd","type":"command_execution","status":"failed"}}
+{"type":"item.completed","item":{"id":"item-msg-2","type":"agent_message"}}
+{"type":"turn.completed"}

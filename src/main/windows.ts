@@ -117,15 +117,21 @@ export function createPetWindow(position: PetPosition): BrowserWindow {
 }
 
 export function createSettingsWindow(): BrowserWindow {
+  const { workArea } = screen.getPrimaryDisplay()
+  const width = Math.min(1280, Math.max(960, workArea.width - 120))
+  const height = Math.min(860, Math.max(700, workArea.height - 80))
   const win = new BrowserWindow({
-    // v0.3.2：设置台重构为「左侧导航 + 右侧面板」，用更宽的矩形给内容留白
-    width: 760,
-    height: 620,
+    width,
+    height,
+    minWidth: 960,
+    minHeight: 700,
     show: false,
-    resizable: false,
-    maximizable: false,
+    resizable: true,
+    maximizable: true,
     fullscreenable: false,
+    backgroundColor: '#9f9f9f',
     title: '桌宠设置',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -145,6 +151,12 @@ export function createSettingsWindow(): BrowserWindow {
   if (process.platform === 'darwin') {
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
   }
+  win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    if (level >= 2) console.warn('[settings]', message, sourceId, line)
+  })
+  win.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[settings] renderer gone', details)
+  })
   win.once('ready-to-show', () => {
     if (process.platform === 'darwin') app.focus({ steal: true })
     win.show()

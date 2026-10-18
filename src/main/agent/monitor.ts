@@ -9,9 +9,18 @@ import type {
   AgentEventKind,
   AgentMonitorEvent,
   AgentMonitorStatus,
-  AgentSource
+  AgentSource,
+  CodexDerivedState,
+  CodexStateMigration
 } from '@shared/types'
 import { AGENT_SOURCE_IDS } from '@shared/agents'
+import {
+  CodexSessionShadow,
+  listCodexSessionFiles,
+  type CodexSessionShadowOptions,
+  type CodexShadowCallbackMeta
+} from './codexShadow'
+import type { CodexLegacyDiagnosticDraft } from './codexShadowLog'
 import { AGENT_SCANNERS } from './scanners'
 
 /** 单家 Agent 的监控配置 */
@@ -31,12 +40,31 @@ export interface AgentSourceConfig {
  */
 export type MonitorConfig = Record<AgentSource, AgentSourceConfig>
 
+export interface AgentMonitorOptions {
+  /** 影子观察测试/诊断选项。不改变 onEvent 语义。 */
+  shadow?: CodexSessionShadowOptions
+}
+
 /** monitor 依赖注入：时间源可注入以便测试；事件回调交给 main 派发副作用 */
 export interface MonitorDeps {
   now(): number
   onEvent(event: AgentMonitorEvent): void
   /** 可选诊断日志（写文件用），不注入则不记 */
   log?(message: string): void
+  /**
+   * Codex 影子状态只读出口。只供日志、测试和对照诊断。
+   * 不得接到桌宠动作、气泡或声音；不得改写 onEvent 语义。
+   */
+  onCodexState?(
+    state: CodexDerivedState,
+    migration?: CodexStateMigration,
+    meta?: CodexShadowCallbackMeta
+  ): void
+  /**
+   * 旧路径事件的只读诊断副本。在决定是否调用 onEvent 之后、实际 onEvent 之前记录；
+   * 被 freshness/env/dedup/prime 忽略时也可记录。失败不得影响 onEvent。
+   */
+  onLegacyDiagnostic?(draft: CodexLegacyDiagnosticDraft): void
 }
 
 /** 简易稳定字符串哈希（djb2），用于事件去重 id，不追求密码学强度 */
@@ -75,10 +103,14 @@ export class AgentMonitor {
   private lastCheckedAt: number | null = null
   private lastEvent: AgentMonitorEvent | null = null
   private lastError: string | null = null
+  private readonly codexShadow: CodexSessionShadow
+  private legacyDiagSeq = 0
+  private readonly legacyDiagSeen = new Set<string>()
 
-  constructor(config: MonitorConfig, deps: MonitorDeps) {
+  constructor(config: MonitorConfig, deps: MonitorDeps, options: AgentMonitorOptions = {}) {
     this.config = config
     this.deps = deps
+    this.codexShadow = new CodexSessionShadow(options.shadow)
   }
 
   /** 某家是否真的在监控：开关开 且 至少选了一个环境 */
@@ -98,8 +130,20 @@ export class AgentMonitor {
     if (!this.anyActive()) return
     // 首轮 prime：把已有旧事件标记为 seen，避免启动后弹一堆历史提醒
     this.primed = false
+    this.codexShadow.clear()
     this.tick()
     this.timer = setInterval(() => this.tick(), AGENT_POLL_INTERVAL_MS)
+  }
+
+  /** 立刻扫描一轮。start() 已包含首轮；后续追加内容用这个，避免再次 start() 把影子游标清掉。 */
+  scanNow(): void {
+    if (!this.anyActive()) return
+    this.tick()
+  }
+
+  /** 只读影子快照，供测试和对照诊断。不改变用户可见行为。 */
+  getCodexShadowSnapshots() {
+    return this.codexShadow.snapshots()
   }
 
   stop(): void {
@@ -147,6 +191,7 @@ export class AgentMonitor {
       if (log && TERMINAL_KINDS.has(event.kind)) {
         log(`SKIP seen: ${event.source}/${event.env}/${event.kind} key=${event.sessionKey}`)
       }
+      if (this.primed) this.emitLegacyDiagnostic(event, { dispatched: false, ignoredBy: ['dedup'] })
       return
     }
 
@@ -175,6 +220,7 @@ export class AgentMonitor {
       const workingAt = this.workingSeenAt.get(event.sessionKey)
       if (workingAt === undefined) {
         if (log) log(`SKIP no-working: ${event.source}/${event.env}/${event.kind} key=${event.sessionKey}`)
+        this.emitLegacyDiagnostic(event, { dispatched: false, ignoredBy: ['no_working'] })
         return
       }
     }
@@ -182,8 +228,44 @@ export class AgentMonitor {
     if (log && TERMINAL_KINDS.has(event.kind)) {
       log(`NOTIFY: ${event.source}/${event.env}/${event.kind} key=${event.sessionKey}`)
     }
+    this.emitLegacyDiagnostic(event, { dispatched: true, ignoredBy: [] })
     this.lastEvent = event
     this.deps.onEvent(event)
+  }
+
+  /**
+   * 方案 A：只把 source=codex 的旧事件交给 Codex 诊断回调。
+   * 其他 Agent 的 onEvent 行为不变，也不写入 codex-legacy.jsonl。
+   * 诊断写入失败不得影响 onEvent / lastEvent。prime 历史不写。
+   */
+  private emitLegacyDiagnostic(
+    event: AgentMonitorEvent,
+    info: { dispatched: boolean; ignoredBy: string[] }
+  ): void {
+    if (event.source !== 'codex') return
+    if (!this.deps.onLegacyDiagnostic) return
+    const observationId = `legacy:${event.id}`
+    if (this.legacyDiagSeen.has(observationId)) return
+    this.legacyDiagSeen.add(observationId)
+    this.legacyDiagSeq += 1
+    try {
+      this.deps.onLegacyDiagnostic({
+        observationId,
+        seq: this.legacyDiagSeq,
+        observedAt: this.deps.now(),
+        eventTime: event.timestampMs,
+        source: event.source,
+        env: event.env,
+        legacyKind: event.kind,
+        rawPath: event.rawPath,
+        sessionKey: event.sessionKey,
+        dispatched: info.dispatched,
+        ignoredBy: info.ignoredBy,
+        productionVisible: info.dispatched && info.ignoredBy.length === 0
+      })
+    } catch {
+      /* 诊断回调失败不得改变 onEvent 行为 */
+    }
   }
 
   private markSeen(id: string): void {
@@ -199,6 +281,7 @@ export class AgentMonitor {
     const now = this.deps.now()
     this.lastCheckedAt = now
     this.lastError = null
+    const emitCodexShadow = this.primed
 
     try {
       const events: AgentMonitorEvent[] = []
@@ -208,9 +291,21 @@ export class AgentMonitor {
 
       // 只处理最近 AGENT_EVENT_FRESH_MS 内、且通过「按环境过滤」的事件（老日志/未勾选的环境忽略）。
       // 时间戳缺失(=now)的会被保留，靠 seenIds 去重防重复。
-      const fresh = events.filter(
-        (e) => now - e.timestampMs <= AGENT_EVENT_FRESH_MS && this.passesEnvFilter(e)
-      )
+      const annotated = events.map((raw) => {
+        const event: AgentMonitorEvent = { ...raw, id: raw.id || eventId(raw) }
+        const ignoredBy: string[] = []
+        if (now - event.timestampMs > AGENT_EVENT_FRESH_MS) ignoredBy.push('freshness')
+        if (!this.passesEnvFilter(event)) ignoredBy.push('env')
+        return { event, ignoredBy }
+      })
+      if (this.primed) {
+        for (const row of annotated) {
+          if (row.ignoredBy.length) {
+            this.emitLegacyDiagnostic(row.event, { dispatched: false, ignoredBy: row.ignoredBy })
+          }
+        }
+      }
+      const fresh = annotated.filter((row) => row.ignoredBy.length === 0).map((row) => row.event)
       // 诊断：本轮扫到的终态事件，被 FRESH / env 过滤前后的情况
       const log = this.deps.log
       if (log) {
@@ -230,6 +325,19 @@ export class AgentMonitor {
     } catch (err) {
       // 解析/IO 异常绝不冒泡，只记录到 status
       this.lastError = err instanceof Error ? err.message : String(err)
+    }
+
+    try {
+      if (this.isActive('codex')) {
+        this.codexShadow.observe(listCodexSessionFiles(now), now, {
+          emitCallbacks: emitCodexShadow,
+          onState: this.deps.onCodexState
+        })
+      }
+    } catch (err) {
+      this.deps.log?.(
+        `codex shadow: ${err instanceof Error ? err.message : String(err)}`
+      )
     } finally {
       // 首轮结束后解除 prime，之后的新事件才真正提醒
       this.primed = true

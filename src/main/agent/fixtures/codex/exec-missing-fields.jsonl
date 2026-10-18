@@ -1,0 +1,5 @@
+{"type":"turn.started"}
+{"type":"item.started","item":{"type":"command_execution","status":"in_progress"}}
+{"type":"item.completed","item":{"type":"error","message":"tool blew up"}}
+{"type":"error"}
+{"type":"turn.completed"}

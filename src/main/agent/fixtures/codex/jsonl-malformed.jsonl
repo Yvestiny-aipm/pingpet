@@ -1,0 +1,3 @@
+{"type":"thread.started","thread_id":"thread-bad"}
+{this is not json}
+{"type":"turn.started"}

@@ -316,8 +316,9 @@ body[data-route='pet'] {
 }
 
 body[data-route='settings'] {
-  background: var(--s-bg);
-  color: var(--s-ink);
+  background: #9f9f9f;
+  color: #111111;
+  overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif;
 }
 

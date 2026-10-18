@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"thread-fail"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","status":"in_progress"}}
+{"type":"turn.failed","error":{"message":"model stream closed"}}

@@ -30,6 +30,9 @@ export const DEFAULT_SETTINGS: Settings = {
   // Agent 监控的默认值见上面的 agentMonitoringDefaults（来自 AGENT_SOURCES 登记处）
   agentProgressBubblesEnabled: true,
   agentCompletionSoundEnabled: false,
+  codexCandidateVisualEnabled: false,
+  codexCandidateBubbleEnabled: false,
+  codexCandidateSoundEnabled: false,
   // v0.5 AI 总结：默认关（保持「默认不联网」），Key 留空由用户自己填
   aiSummaryEnabled: false,
   aiProvider: 'anthropic',
@@ -114,6 +117,17 @@ export const AGENT_TERMINAL_BUBBLE_MS = 6_000
 export const AGENT_TERMINAL_COALESCE_MS = 900
 /** 扫描会话目录时的递归深度上限 */
 export const AGENT_SCAN_MAX_DEPTH = 5
+
+/**
+ * Codex 影子观察失联阈值（毫秒）。
+ *
+ * 这是 PingPet 产品策略，不是 Codex 官方协议值。
+ * 当前 120000 是待产品调优的临时默认：过短会把正常思考空档误标成失联，
+ * 过长会让用户（未来若接入）很晚才知道观察已经停了。
+ * 测试必须注入更短的 observationStaleAfterMs，并用可注入 clock，禁止真实长 sleep。
+ * 判断失联只用 PingPet 的 observedAt，不用 Codex eventTime。
+ */
+export const CODEX_OBSERVATION_STALE_AFTER_MS = 120_000
 
 /**
  * 宠物窗口固定尺寸（pt）。

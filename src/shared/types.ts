@@ -62,6 +62,21 @@ export interface Settings extends AgentMonitoringSettings {
   agentProgressBubblesEnabled: boolean
   /** 完成时是否播放提示音（v0.2 仅留开关，默认关闭，暂不真正播放） */
   agentCompletionSoundEnabled: boolean
+  /**
+   * Codex candidate 静默桌宠姿态。默认关：用户行为与未接入前一致。
+   * 打开后只改 Codex 姿态，不接气泡、声音、shouldNotify；其他 Agent 不受影响。
+   */
+  codexCandidateVisualEnabled: boolean
+  /**
+   * Codex candidate 部分失败气泡。默认关：与视觉开关独立，不改用户现有配置。
+   * 打开后只允许 completed_with_partial_failure 弹一条中性提醒；不接声音、成功提示、shouldNotify。
+   */
+  codexCandidateBubbleEnabled: boolean
+  /**
+   * Codex candidate 部分失败提醒音。默认关：与视觉/气泡开关独立，不改用户现有配置。
+   * 打开后也只允许「部分失败气泡已真正发出」时进入判定；不复用完成音，shouldNotify 仍为 false。
+   */
+  codexCandidateSoundEnabled: boolean
 
   // ---- v0.5 AI 总结（BYOK：用户自己的 Key，可选联网功能，默认关） ----
   /**
@@ -139,9 +154,17 @@ export interface AgentMonitorEvent {
   source: AgentSource
   /** v0.3.3：会话来自哪个环境（终端 / VS Code / 客户端），用于按环境过滤 */
   env: AgentEnv
+  /**
+   * 旧路径 session 级关联键。可用于 session 级对照。
+   * 不是 threadId / turnId；不得从文件名、sessionKey 或时间戳猜造后两者。
+   * 旧路径缺失 threadId / turnId 时保留 unknown。
+   */
   sessionKey: string
   kind: AgentEventKind
   message: string
+  /**
+   * 旧路径事件自身时间（日志/文件时间）。对照时对应 eventTime，不是 PingPet observedAt。
+   */
   timestampMs: number
   rawPath?: string
   /** v0.2.1：终态的细分停止原因，working 事件为 undefined */
@@ -343,11 +366,20 @@ export const IPC = {
   RevealPetPacksFolder: 'pet:reveal-packs-folder',
   OnSnapshot: 'pet:snapshot',
   OnShowBubble: 'pet:show-bubble',
+  OnPlayCodexAttentionSound: 'pet:play-codex-attention-sound',
   OnHideBubble: 'pet:hide-bubble',
   // v0.2.1：只切宠物状态、不弹气泡（用于 Agent working 时的安静思考视觉）
   OnSetState: 'pet:set-state',
   OnRecheckHover: 'pet:recheck-hover'
 } as const
+
+/** Codex 部分失败独立 attention 音。不得走 playDing / 完成音。 */
+export interface CodexAttentionSoundPayload {
+  sound: true
+  soundType: 'attention'
+  shouldNotify: false
+  dataUrl: string
+}
 
 /** v0.2.1：只切宠物状态的载荷（不带气泡） */
 export interface PetStatePayload {
@@ -396,8 +428,296 @@ export interface PetApi {
   revealPetPacksFolder(): Promise<void>
   onSnapshot(cb: (snapshot: Snapshot) => void): () => void
   onShowBubble(cb: (bubble: BubblePayload) => void): () => void
+  onPlayCodexAttentionSound(cb: (payload: CodexAttentionSoundPayload) => void): () => void
   onHideBubble(cb: () => void): () => void
   /** v0.2.1：只切宠物状态、不弹气泡（Agent working 时的思考视觉） */
   onSetState(cb: (payload: PetStatePayload) => void): () => void
   onRecheckHover(cb: (point: WindowPoint) => void): () => void
+}
+
+// ---------------------------------------------------------------------------
+// Codex 观察事件（阶段 1：只记录原始信号，不接入 Monitor / 桌宠）
+// ---------------------------------------------------------------------------
+
+/**
+ * 信号来源。阶段 1 只区分两类已确认能读到的 Codex 输出：
+ * - exec_json：`codex exec --json` 的顶层点号事件
+ * - session_jsonl：`~/.codex/sessions` 本地会话行
+ *
+ * App Server 的 JSON-RPC 外层尚未确认，不能当成已支持；见到 jsonrpc 信封记 unsupported。
+ */
+export type CodexObservationSource = 'exec_json' | 'session_jsonl'
+
+/** 解析器对这一行的识别结果。unknown/unsupported/malformed/partial 都不得当成成功。 */
+export type CodexParserRecognition = 'recognized' | 'unknown' | 'unsupported' | 'malformed' | 'partial'
+
+/**
+ * 归一化后的事件名。
+ * 点号官方顶层事件只表示 `codex exec --json`。
+ * `event_msg.*` / `session_meta` 等只表示本地 session JSONL，即使名字看起来像官方事件也不得混用。
+ * `turn.cancelled` 与本地 `event_msg.turn_aborted` 是两类原始事件，不得合并。
+ */
+export type CodexNormalizedEventType =
+  | 'thread.started'
+  | 'turn.started'
+  | 'turn.completed'
+  | 'turn.failed'
+  | 'turn.cancelled'
+  | 'item.started'
+  | 'item.updated'
+  | 'item.completed'
+  | 'error'
+  | 'session_meta'
+  | 'event_msg.task_started'
+  | 'event_msg.task_complete'
+  | 'event_msg.turn_aborted'
+  | 'event_msg.item_started'
+  | 'event_msg.item_updated'
+  | 'event_msg.item_completed'
+  | 'event_msg.other'
+  | 'response_item'
+  | 'turn_context'
+  | 'token_usage_record'
+  | 'world_state'
+  | 'compacted'
+  | 'unknown'
+  | 'unsupported'
+  | 'malformed'
+  | 'partial_line'
+
+/** 这条观察记录的证据从哪来。比 source 更细，半行/坏行单独记账。 */
+export type CodexEvidenceOrigin =
+  | 'codex_exec_json'
+  | 'codex_session_jsonl'
+  | 'jsonl_malformed'
+  | 'jsonl_partial'
+
+/**
+ * Codex 统一观察事件。只描述「看到了什么」，不描述桌宠该做什么。
+ * 未接入 AgentMonitor；缺字段保持可选，不得补造官方协议里不存在的 id。
+ */
+export interface CodexObservationEvent {
+  source: CodexObservationSource
+  eventType: CodexNormalizedEventType
+  /**
+   * 明确的 session_id（payload 优先）。
+   * 文件名只作 fallback；此时 parseNote 会标明，sourcePath 仍指向原文件。
+   */
+  sessionId?: string
+  /** 读到该行时的文件路径或 fixture 名，不是 session id */
+  sourcePath?: string
+  /**
+   * 官方 thread.started.thread_id，或本地 payload.thread_id。
+   * 只有原始事件确实提供时才记录；不得从文件名、sessionKey 或时间戳猜造。
+   */
+  threadId?: string
+  /**
+   * 官方 turn 事件通常无此字段；本地 event_msg.task_* 常带 turn_id。
+   * 只有原始事件确实提供时才记录；缺失保持 unknown / undefined，不得猜造。
+   */
+  turnId?: string
+  itemId?: string
+  /**
+   * 原始 Codex 事件自身携带的时间（毫秒）。
+   * 解析自 timestamp / ts / started_at 等；缺则 undefined，不得用 observedAt 填入。
+   */
+  eventTime?: number
+  /**
+   * PingPet 读取和处理该事件的时间（毫秒）。
+   * 不得写成 eventTime。
+   */
+  observedAt: number
+  /** 原始 payload 的安全摘要（截断大字段），不是完整原文 */
+  payload: unknown
+  /** 解析器是否把该行识别成已知事件家族 */
+  recognized: boolean
+  recognition: CodexParserRecognition
+  evidenceOrigin: CodexEvidenceOrigin
+  /** 稳定去重键；同一条事件重放必须得到同一值 */
+  dedupKey: string
+  /** 原始 type 字符串（event_msg 则记 payload.type） */
+  rawType?: string
+  itemKind?: string
+  itemStatus?: string
+  /** 本地 session 行上的 ordinal，适合做去重辅助 */
+  ordinal?: number
+  parseNote?: string
+}
+
+/**
+ * 官方 `codex exec --json` 顶层 type。
+ * 列入此表只表示解析器/检测器已准备识别，不等于真实协议已验证。
+ * `turn.cancelled` 尚未被真实 exec 样本覆盖。
+ */
+export const CODEX_STRUCTURED_EVENT_TYPES = [
+  'thread.started',
+  'turn.started',
+  'turn.completed',
+  'turn.failed',
+  'turn.cancelled',
+  'item.started',
+  'item.updated',
+  'item.completed',
+  'error'
+] as const
+
+export type CodexStructuredEventType = (typeof CODEX_STRUCTURED_EVENT_TYPES)[number]
+
+// ---------------------------------------------------------------------------
+// Codex 派生状态（阶段 2：只判断和记录，不接入 Monitor / 桌宠）
+// ---------------------------------------------------------------------------
+
+/**
+ * 生命周期。succeeded 留在模型里是为了以后任务语义验收，阶段 2 检测器不得产出它。
+ * completed_signal ≠ succeeded。
+ *
+ * incomplete 是观察终态（见方案 §5.1）：整轮没有终态且输出/观察已无法完整确认。
+ * 单个 item/tool 失败且 turn 仍在进行时，生命周期保持 running，不得进入 incomplete。
+ */
+export type CodexLifecycleState =
+  | 'running'
+  | 'waiting_input'
+  | 'waiting_approval'
+  | 'completed_signal'
+  | 'succeeded'
+  | 'cancelled'
+  | 'failed'
+  | 'incomplete'
+  | 'unknown'
+
+/** 观察终态。incomplete 在此集合内；running / waiting / unknown 不是终态。 */
+export const CODEX_LIFECYCLE_TERMINALS: readonly CodexLifecycleState[] = [
+  'completed_signal',
+  'succeeded',
+  'cancelled',
+  'failed',
+  'incomplete'
+]
+
+export type CodexCause =
+  | 'waiting_for_input'
+  | 'waiting_for_approval'
+  | 'user_cancelled'
+  | 'network_error'
+  | 'stream_disconnected'
+  | 'rate_limited'
+  | 'usage_limit'
+  | 'session_budget_exceeded'
+  | 'auth_failed'
+  | 'permission_denied'
+  | 'sandbox_denied'
+  | 'tool_failed'
+  | 'turn_failed'
+  | 'context_window_exceeded'
+  | 'timeout'
+  | 'process_exit'
+  | 'output_truncated'
+  | 'monitor_disconnected'
+  | 'unknown'
+
+export type CodexProcessDimension = 'not_observed' | 'alive' | 'exited' | 'unknown'
+export type CodexConnectionDimension = 'connected' | 'stale' | 'disconnected' | 'unknown'
+export type CodexSessionDimension = 'not_loaded' | 'idle' | 'active' | 'system_error' | 'unknown'
+export type CodexTurnDimension =
+  | 'not_started'
+  | 'in_progress'
+  | 'waiting'
+  | 'completed'
+  | 'interrupted'
+  | 'failed'
+  | 'unknown'
+export type CodexItemDimension =
+  | 'none'
+  | 'running'
+  | 'succeeded'
+  | 'partial_failure'
+  | 'failed'
+  | 'declined'
+  | 'unknown'
+export type CodexOutputIntegrity = 'complete' | 'partial' | 'none' | 'unknown'
+/** 阶段 2 固定 not_verified，不做任务是否真正完成的判断。 */
+export type CodexTaskSemantics =
+  | 'completed'
+  | 'partially_completed'
+  | 'blocked'
+  | 'cancelled'
+  | 'not_verified'
+  | 'unknown'
+/**
+ * 是否允许自动重试。
+ * `never` 只表示产品明确禁止自动重试，不是“任务已完成所以不必重试”。
+ * `turn.completed` / `taskSemantics=not_verified` 时用 `unknown`，不得写成 `never`。
+ */
+export type CodexRetryability = 'never' | 'safe_retry' | 'backoff' | 'user_action' | 'reauth' | 'unknown'
+/**
+ * 对结构化事件/状态迁移是否成立的置信度。
+ * 不是“任务已经成功完成”的置信度。confidence=high 不得被上层当成 succeeded。
+ */
+export type CodexConfidence = 'high' | 'medium' | 'low'
+
+export interface CodexStateEvidence {
+  id: string
+  eventDedupKey: string
+  source: CodexObservationSource
+  rawType?: string
+  evidenceOrigin: CodexEvidenceOrigin
+  eventType: CodexNormalizedEventType
+  observedAt: number
+  note?: string
+}
+
+export interface CodexStateConflict {
+  observedAt: number
+  keptLifecycle: CodexLifecycleState
+  ignoredEventType: CodexNormalizedEventType
+  ignoredSource: CodexObservationSource
+  reason: string
+}
+
+/** 多维派生状态。不得压成单个 enum。 */
+export interface CodexDerivedState {
+  lifecycle: CodexLifecycleState
+  cause: CodexCause
+  process: CodexProcessDimension
+  connection: CodexConnectionDimension
+  session: CodexSessionDimension
+  turn: CodexTurnDimension
+  item: CodexItemDimension
+  outputIntegrity: CodexOutputIntegrity
+  taskSemantics: CodexTaskSemantics
+  retryability: CodexRetryability
+  confidence: CodexConfidence
+  evidence: CodexStateEvidence[]
+  conflicts: CodexStateConflict[]
+  /**
+   * 检测器最近一次应用事件的时间（PingPet）。
+   * 不是原始 Codex eventTime。
+   */
+  observedAt: number
+  sessionId?: string
+  /** 只有原始事件提供时才有；缺失不得猜造 */
+  threadId?: string
+  /** 只有原始事件提供时才有；缺失不得猜造 */
+  turnId?: string
+}
+
+export interface CodexStateMigration {
+  previousState: CodexDerivedState
+  nextState: CodexDerivedState
+  cause: CodexCause
+  evidenceIds: string[]
+  source: CodexObservationSource | 'observer' | 'process'
+  /**
+   * 检测器应用该事件的时间（PingPet）。
+   * 不是原始 Codex 事件时间。
+   */
+  observedAt: number
+  /**
+   * 原始 Codex 事件自身携带的时间。
+   * 未知则为 null，不得用 observedAt 或时间戳猜造。
+   */
+  eventTime?: number | null
+  confidence: CodexConfidence
+  reason: string
+  eventDedupKey?: string
 }

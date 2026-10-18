@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { BubbleAnchor, BubblePayload, PetState, Snapshot } from '@shared/types'
+import type { BubbleAnchor, BubblePayload, CodexAttentionSoundPayload, PetState, Snapshot } from '@shared/types'
 import { BUBBLE_DEFAULT_ANGLE_DEG, BUBBLE_DEFAULT_DISTANCE, PET_CENTER } from '@shared/defaults'
 import { api } from '../api'
 import { effectiveBubbleWindowPoint, windowPointToAnchor } from '../bubbleGeometry'
@@ -59,6 +59,22 @@ function playDing(): void {
       osc.start(t0)
       osc.stop(t0 + 0.24)
     }
+  } catch {
+    /* 没有音频能力就算了 */
+  }
+}
+
+/**
+ * Codex 部分失败 notice。独立于 playDing，失败只静音，绝不回退完成音。
+ */
+function playCodexAttentionNotice(payload: CodexAttentionSoundPayload): void {
+  try {
+    if (!payload.sound || payload.soundType !== 'attention' || payload.shouldNotify) return
+    if (!payload.dataUrl.startsWith('data:audio/wav')) return
+    const audio = new Audio(payload.dataUrl)
+    void audio.play().catch(() => {
+      /* 播放失败保持静音，不影响气泡 */
+    })
   } catch {
     /* 没有音频能力就算了 */
   }
@@ -147,6 +163,9 @@ export default function PetView(): JSX.Element {
       // 不依赖外部音频文件，打包自包含。任何异常都吞掉，绝不影响气泡。
       if (payload.sound) playDing()
     })
+    const offAttentionSound = api.onPlayCodexAttentionSound((payload) => {
+      playCodexAttentionNotice(payload)
+    })
     const offHide = api.onHideBubble(() => {
       clearBubble()
     })
@@ -171,6 +190,7 @@ export default function PetView(): JSX.Element {
       disposed = true
       offSnapshot()
       offShow()
+      offAttentionSound()
       offHide()
       offSetState()
       offRecheckHover()

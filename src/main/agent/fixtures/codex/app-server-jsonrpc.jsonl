@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","method":"codex/event","params":{"type":"thread.started","thread_id":"thread-rpc"},"id":1}
+{"type":"thread.started","thread_id":"thread-exec"}

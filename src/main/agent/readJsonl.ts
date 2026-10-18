@@ -120,3 +120,138 @@ export function readJsonlTail(filePath: string, maxBytes = 96_000): Record<strin
     }
   }
 }
+
+/**
+ * JSONL 增量游标。给 Codex 观察层用，不改上面 Head/Tail 的静默丢行行为。
+ *
+ * leftover：上一块末尾的半行（还没有 '\n'）。
+ * lineCount：已经交付的完整行数（含坏行），用作稳定行号。
+ * charOffset：已经交付文本的字符偏移（UTF-16 code unit，只用于同行去重，不是文件字节）。
+ */
+export interface JsonlFeedState {
+  leftover: string
+  lineCount: number
+  charOffset: number
+}
+
+export function emptyJsonlFeedState(): JsonlFeedState {
+  return { leftover: '', lineCount: 0, charOffset: 0 }
+}
+
+export type JsonlFeedLineKind = 'object' | 'malformed' | 'non_object'
+
+export interface JsonlFeedLine {
+  kind: JsonlFeedLineKind
+  raw: string
+  value?: unknown
+  lineIndex: number
+  charOffset: number
+}
+
+function classifyParsedLine(raw: string, lineIndex: number, charOffset: number): JsonlFeedLine {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return { kind: 'object', raw, value: parsed, lineIndex, charOffset }
+    }
+    return { kind: 'non_object', raw, value: parsed, lineIndex, charOffset }
+  } catch {
+    return { kind: 'malformed', raw, lineIndex, charOffset }
+  }
+}
+
+/**
+ * 把一块新文本喂进增量解析器。
+ * - 末尾半行留在 leftover，不丢、也不当成完整事件；
+ * - 已以换行结束、但 JSON 坏掉的行会以 malformed 交出来，供观察层记账。
+ */
+export function feedJsonlText(
+  chunk: string,
+  state: JsonlFeedState
+): { lines: JsonlFeedLine[]; state: JsonlFeedState } {
+  const combined = `${state.leftover}${chunk}`
+  const parts = combined.split('\n')
+  const leftover = parts.pop() ?? ''
+  const lines: JsonlFeedLine[] = []
+  let charOffset = state.charOffset
+  let lineCount = state.lineCount
+
+  for (const part of parts) {
+    const raw = part.trim()
+    if (raw) {
+      lines.push(classifyParsedLine(raw, lineCount, charOffset))
+      lineCount += 1
+    }
+    charOffset += part.length + 1
+  }
+
+  return {
+    lines,
+    state: { leftover, lineCount, charOffset }
+  }
+}
+
+/** 把残留半行交出来：能 parse 就当完整行，否则 kind=malformed（由调用方再标成 partial_line）。 */
+export function flushJsonlFeed(state: JsonlFeedState): {
+  line: JsonlFeedLine | null
+  state: JsonlFeedState
+} {
+  const raw = state.leftover.trim()
+  if (!raw) {
+    return { line: null, state: { leftover: '', lineCount: state.lineCount, charOffset: state.charOffset } }
+  }
+  const line = classifyParsedLine(raw, state.lineCount, state.charOffset)
+  return {
+    line,
+    state: {
+      leftover: '',
+      lineCount: state.lineCount + 1,
+      charOffset: state.charOffset + state.leftover.length
+    }
+  }
+}
+
+/**
+ * 从文件某个字节偏移读一段文本。失败返回空串 + 原偏移，不抛给上层。
+ * 注意：按字节切开可能落在 UTF-8 字符中间，半字符由 feed 的 leftover 机制消化。
+ */
+export function readFileTextFromOffset(
+  filePath: string,
+  byteOffset: number,
+  maxBytes = 256_000
+): { text: string; nextOffset: number; eof: boolean; size: number } {
+  let fd: number | null = null
+  try {
+    const stat = statSync(filePath)
+    if (!stat.isFile() || stat.size === 0 || byteOffset >= stat.size) {
+      return { text: '', nextOffset: Math.max(0, byteOffset), eof: true, size: stat.size }
+    }
+    const start = Math.max(0, byteOffset)
+    const length = Math.min(maxBytes, stat.size - start)
+    const buffer = Buffer.allocUnsafe(length)
+    fd = openSync(filePath, 'r')
+    let read = 0
+    while (read < length) {
+      const n = readSync(fd, buffer, read, length - read, start + read)
+      if (n <= 0) break
+      read += n
+    }
+    const nextOffset = start + read
+    return {
+      text: buffer.toString('utf8', 0, read),
+      nextOffset,
+      eof: nextOffset >= stat.size,
+      size: stat.size
+    }
+  } catch {
+    return { text: '', nextOffset: byteOffset, eof: true, size: 0 }
+  } finally {
+    if (fd !== null) {
+      try {
+        closeSync(fd)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}

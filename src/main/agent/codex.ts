@@ -72,7 +72,24 @@ function codexMetaToEnv(payload: Record<string, unknown>): AgentEnv | null {
   return null
 }
 
-function getTimestampMs(line: Record<string, unknown>): number {
+export type CodexLegacySignalVia =
+  | 'event_msg.task_started'
+  | 'event_msg.task_complete'
+  | 'event_msg.turn_aborted'
+  | 'response_item.reasoning'
+  | 'response_item.function_call'
+  | 'response_item.assistant_text'
+
+/** 旧路径对单行 session JSONL 的分类。回放可复用；不改变 scanCodex 语义。 */
+export interface CodexLegacySignal {
+  kind: AgentEventKind
+  reason?: AgentStopReason
+  detail?: string
+  via: CodexLegacySignalVia
+  timestampMs: number
+}
+
+export function getCodexLineTimestampMs(line: Record<string, unknown>): number {
   // codex 行常带 ISO 时间戳字段（timestamp / ts），拿不到就用 0（由 monitor 侧兜底）
   const raw = line.timestamp ?? line.ts
   if (typeof raw === 'string') {
@@ -81,6 +98,62 @@ function getTimestampMs(line: Record<string, unknown>): number {
   }
   if (typeof raw === 'number' && Number.isFinite(raw)) return raw
   return 0
+}
+
+/**
+ * 旧路径单行判定（与 parseCodexFile 同一套规则）。
+ * 回放不得把 assistant 正文带出；调用方如需气泡文案，仍由 parseCodexFile 本地拼。
+ */
+export function classifyCodexLegacyLine(line: Record<string, unknown>): CodexLegacySignal | null {
+  const type = line.type
+  const payload =
+    line.payload && typeof line.payload === 'object' ? (line.payload as Record<string, unknown>) : {}
+  const payloadType = payload.type
+  const timestampMs = getCodexLineTimestampMs(line)
+
+  if (type === 'event_msg') {
+    switch (payloadType) {
+      case 'task_started':
+        return { kind: 'working', via: 'event_msg.task_started', timestampMs }
+      case 'task_complete':
+        return { kind: 'done', reason: 'completed', via: 'event_msg.task_complete', timestampMs }
+      case 'turn_aborted':
+        return {
+          kind: 'failed',
+          reason: 'interrupted',
+          detail: payloadReason(payload),
+          via: 'event_msg.turn_aborted',
+          timestampMs
+        }
+      default:
+        return null
+    }
+  }
+
+  if (type === 'response_item') {
+    if (payloadType === 'reasoning' || payloadType === 'function_call') {
+      return {
+        kind: 'working',
+        via: payloadType === 'reasoning' ? 'response_item.reasoning' : 'response_item.function_call',
+        timestampMs
+      }
+    }
+    if (payloadType === 'message' && payload.role === 'assistant') {
+      const text = extractOutputText(payload)
+      const classified = classifyStopText(text)
+      if (classified) {
+        return {
+          kind: classified.kind,
+          reason: classified.reason,
+          detail: classified.detail,
+          via: 'response_item.assistant_text',
+          timestampMs
+        }
+      }
+    }
+  }
+
+  return null
 }
 
 /**
@@ -111,75 +184,35 @@ function parseCodexFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
   const oldestMs = nowMs - AGENT_EVENT_FRESH_MS
 
   for (const line of lines) {
-    const type = line.type
-    const payload =
-      line.payload && typeof line.payload === 'object'
-        ? (line.payload as Record<string, unknown>)
-        : {}
-    const payloadType = payload.type
-    const tsMs = getTimestampMs(line) || nowMs
+    const classified = classifyCodexLegacyLine(line)
+    if (!classified) continue
+    const tsMs = classified.timestampMs || nowMs
     if (tsMs < oldestMs) continue
 
-    let kind: AgentEventKind | null = null
     let message = ''
-    let reason: AgentStopReason | undefined
-    let detail: string | undefined
-
-    if (type === 'event_msg') {
-      // event_msg 提供最明确的显式信号，优先用它
-      switch (payloadType) {
-        case 'task_started':
-          // 正在干活：发 working 让宠物切 thinking，但不弹气泡
-          kind = 'working'
-          message = 'Codex 开始处理任务'
-          break
-        case 'task_complete':
-          kind = 'done'
-          reason = 'completed'
-          message = 'Codex 完成了任务'
-          break
-        case 'turn_aborted':
-          // 被中断：尽量从 payload 里摘出中断原因（reason / message 字段）
-          kind = 'failed'
-          reason = 'interrupted'
-          detail = payloadReason(payload)
-          message = 'Codex 任务被中断'
-          break
-        default:
-          break // token_count / agent_message / user_message 不单独成事件
-      }
-    } else if (type === 'response_item') {
-      if (payloadType === 'reasoning' || payloadType === 'function_call') {
-        // 正在干活：working（不弹气泡）
-        kind = 'working'
-        message = 'Codex 正在处理任务'
-      } else if (payloadType === 'message' && payload.role === 'assistant') {
-        // assistant 说话且能判出「停下原因」时，才当成一次终态提醒
-        const text = extractOutputText(payload)
-        const classified = classifyStopText(text)
-        if (classified) {
-          kind = classified.kind
-          reason = classified.reason
-          detail = classified.detail
-          message = text.slice(0, 200)
-        }
-      }
+    if (classified.via === 'event_msg.task_started') message = 'Codex 开始处理任务'
+    else if (classified.via === 'event_msg.task_complete') message = 'Codex 这一轮结束了'
+    else if (classified.via === 'event_msg.turn_aborted') message = 'Codex 任务被中断'
+    else if (classified.via === 'response_item.reasoning' || classified.via === 'response_item.function_call') {
+      message = 'Codex 正在处理任务'
+    } else if (classified.via === 'response_item.assistant_text') {
+      message = extractOutputText(
+        line.payload && typeof line.payload === 'object' ? (line.payload as Record<string, unknown>) : {}
+      ).slice(0, 200)
     }
 
-    if (kind) {
-      events.push({
-        id: '', // 由 monitor 统一生成稳定 id
-        source: 'codex',
-        env,
-        sessionKey,
-        kind,
-        message,
-        timestampMs: tsMs,
-        rawPath: filePath,
-        reason,
-        detail
-      })
-    }
+    events.push({
+      id: '', // 由 monitor 统一生成稳定 id
+      source: 'codex',
+      env,
+      sessionKey,
+      kind: classified.kind,
+      message,
+      timestampMs: tsMs,
+      rawPath: filePath,
+      reason: classified.reason,
+      detail: classified.detail
+    })
   }
 
   return events

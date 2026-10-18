@@ -20,6 +20,7 @@ import type {
   AgentMonitorStatus,
   AgentSource,
   BubblePayload,
+  CodexAttentionSoundPayload,
   ImportPetPackResult,
   PickPetImageResult,
   PickSkinResult,
@@ -51,6 +52,42 @@ import {
 } from './config'
 import { AgentMonitor } from './agent/monitor'
 import type { MonitorConfig } from './agent/monitor'
+import {
+  isCodexLegacyProtocolComplete,
+  petStateForPresentedKind,
+  presentableTerminalEvents,
+  shouldPlayAgentCompletionSound,
+  shouldPresentAgentTerminalToUser,
+  silentCodexCompletionPetState
+} from './agent/codexLegacyPresentation'
+import {
+  CodexPartialFailureBubbleGate,
+  planCodexPartialFailureBubble
+} from './agent/codexBubblePresentation'
+import {
+  inspectCodexAttentionSoundFile,
+  resolveCodexAttentionSoundPath
+} from './agent/codexAttentionSoundResource'
+import {
+  CodexPartialFailureSoundGate,
+  planCodexPartialFailureSound
+} from './agent/codexSoundPresentation'
+import {
+  CodexSilentVisualGate,
+  planCodexSilentVisual,
+  shouldLegacyCodexDrivePetVisual,
+  silentVisualDurationMs
+} from './agent/codexVisiblePresentation'
+import {
+  appendCodexAttentionSoundDiagnostic,
+  appendCodexCandidateDiagnostic,
+  appendCodexLegacyDiagnostic,
+  appendCodexShadowDiagnostic,
+  codexAttentionSoundDiagnosticPath,
+  codexCandidateDiagnosticPath,
+  codexLegacyDiagnosticPath,
+  codexShadowDiagnosticPath
+} from './agent/codexShadowLog'
 import { summarizeAgentStop, testAiSummary } from './ai/summarize'
 import { getSettings, migrateSecretsAtRest, patchSettings } from './store'
 import { checkForUpdate } from './update'
@@ -180,10 +217,10 @@ function sendBubble(
   durationMs = BUBBLE_DURATION_MS,
   sound = false,
   interactive = false
-): void {
+): boolean {
   // 宠物被隐藏时不弹气泡：用户主动隐藏 = 明确表达"别打扰"，尊重它。
   // Agent 事件仍会被 monitor 记为已处理，不会因这次没弹而重复触发。
-  if (!petWindow || petWindow.isDestroyed() || !petWindow.isVisible()) return
+  if (!petWindow || petWindow.isDestroyed() || !petWindow.isVisible()) return false
   const bounds = petWindow.getBounds()
   const display = screen.getDisplayMatching(bounds)
   const payload: BubblePayload = {
@@ -197,16 +234,41 @@ function sendBubble(
     interactive
   }
   petWindow.webContents.send(IPC.OnShowBubble, payload)
+  return true
 }
 
 /**
  * v0.2.1：只切换宠物状态、不弹气泡。用于 Agent working 时的安静思考视觉。
  * 与 sendBubble 一样尊重「隐藏 = 别打扰」，隐藏时什么都不做。
  */
-function sendPetState(state: PetState, durationMs: number): void {
-  if (!petWindow || petWindow.isDestroyed() || !petWindow.isVisible()) return
+function sendPetState(state: PetState, durationMs: number): boolean {
+  if (!petWindow || petWindow.isDestroyed() || !petWindow.isVisible()) return false
   const payload: PetStatePayload = { state, durationMs }
   petWindow.webContents.send(IPC.OnSetState, payload)
+  return true
+}
+
+function inspectRuntimeCodexAttentionSound() {
+  return inspectCodexAttentionSoundFile(
+    resolveCodexAttentionSoundPath({
+      packaged: app.isPackaged,
+      appPath: app.getAppPath(),
+      resourcesPath: process.resourcesPath
+    })
+  )
+}
+
+/** 独立 Codex attention 音。禁止走 OnShowBubble.sound / playDing。 */
+function sendCodexAttentionSound(dataUrl: string): boolean {
+  if (!petWindow || petWindow.isDestroyed() || !petWindow.isVisible()) return false
+  const payload: CodexAttentionSoundPayload = {
+    sound: true,
+    soundType: 'attention',
+    shouldNotify: false,
+    dataUrl
+  }
+  petWindow.webContents.send(IPC.OnPlayCodexAttentionSound, payload)
+  return true
 }
 
 function setPetInteractive(interactive: boolean): void {
@@ -267,33 +329,43 @@ function scheduleIdleBubble(): void {
 // ---------- Agent 监控（v0.2） ----------
 
 let agentMonitor: AgentMonitor | null = null
+const codexSilentVisualGate = new CodexSilentVisualGate()
+const codexPartialFailureBubbleGate = new CodexPartialFailureBubbleGate()
+const codexPartialFailureSoundGate = new CodexPartialFailureSoundGate()
 
-/** Agent 状态 → 宠物状态。done 复用 happy，needs_attention 复用 attention */
+/** Agent 状态 → 宠物状态。其他 Agent 的 done 仍复用 happy；Codex done 不走这里。 */
 function agentKindToPetState(kind: AgentEventKind): PetState {
-  switch (kind) {
-    case 'working':
-      return 'thinking'
-    case 'done':
-      return 'happy'
-    case 'needs_attention':
-      return 'attention'
-    case 'failed':
-      return 'failed'
-  }
+  return petStateForPresentedKind(kind)
 }
 
 /**
  * 统一处理一条 Agent 事件。
  * v0.2.1 行为（用户要求）：只有 Agent「停下来」时才弹气泡，且气泡说清停下的原因。
  *   - working：Agent 正在干活。只切宠物为 thinking（安静的思考视觉），绝不弹气泡。
- *   - done / needs_attention / failed：Agent 停止输出了，弹一条说明「为什么停」的气泡。
+ *   - 其他 Agent 的 done / needs_attention / failed：弹一条说明「为什么停」的气泡。
+ *   - Codex 的 done：只是协议轮次结束，不是任务成功。保留内部事件，不弹成功气泡、不响完成音、不庆祝。
  */
 function handleAgentEvent(event: AgentMonitorEvent): void {
   // v0.3.3：无总开关。两个子开关都关时 monitor 根本不 tick，这里无需再挡。
+  const candidateVisualOn = getSettings().codexCandidateVisualEnabled
   if (event.kind === 'working') {
     // 正在干活：只让宠物切 thinking（保留思考视觉），不打扰、不弹气泡。
-    sendPetState('thinking', AGENT_THINKING_STATE_MS)
+    // 开关打开时 Codex 姿态改由 candidate 驱动，避免与旧 Monitor 双切。
+    if (shouldLegacyCodexDrivePetVisual(candidateVisualOn, event)) {
+      sendPetState('thinking', AGENT_THINKING_STATE_MS)
+    }
     // 诊断区（活跃会话/最近事件）也可能变了，广播刷新设置页
+    broadcastSnapshot()
+    return
+  }
+
+  if (!shouldPresentAgentTerminalToUser(event)) {
+    if (
+      isCodexLegacyProtocolComplete(event) &&
+      shouldLegacyCodexDrivePetVisual(candidateVisualOn, event)
+    ) {
+      sendPetState(silentCodexCompletionPetState(), AGENT_THINKING_STATE_MS)
+    }
     broadcastSnapshot()
     return
   }
@@ -313,14 +385,13 @@ let terminalFlushTimer: ReturnType<typeof setTimeout> | null = null
 
 async function flushTerminalBubbles(): Promise<void> {
   terminalFlushTimer = null
-  const batch = pendingTerminals
+  const batch = presentableTerminalEvents(pendingTerminals)
   pendingTerminals = []
   if (batch.length === 0) return
 
-  // 提示音：这批里只要有「完成」事件、且用户开了提示音，就随气泡响一声
+  // 提示音：非 Codex 的 done 才算完成音。Codex done 不得触发成功完成音。
   const soundOn = getSettings().agentCompletionSoundEnabled
-  const hasDone = batch.some((e) => e.kind === 'done')
-  const sound = soundOn && hasDone
+  const sound = soundOn && shouldPlayAgentCompletionSound(batch)
 
   if (batch.length === 1) {
     const e = batch[0]
@@ -382,9 +453,127 @@ function syncAgentMonitor(): void {
   if (!agentMonitor) {
     agentMonitor = new AgentMonitor(config, {
       now: () => Date.now(),
-      onEvent: handleAgentEvent
-      // 需要排查 Agent 监控链路时，这里注入一个 log 回调即可（MonitorDeps.log）。
-      // 正式版不注入 → 监控不写任何诊断日志。
+      onEvent: handleAgentEvent,
+      // 方案 A：只写 source=codex 的旧事件到 codex-legacy.jsonl，避免其他 Agent 被当成 Codex 样本。
+      // 旧事件脱敏副本只写本地诊断，在 onEvent 之前记录；失败不影响 handleAgentEvent。
+      onLegacyDiagnostic: (draft) => {
+        appendCodexLegacyDiagnostic(draft, codexLegacyDiagnosticPath(app.getPath('userData')))
+      },
+      // 影子状态默认只写本地诊断。开关打开时仅切 Codex 静默姿态，不进旧 done、不弹气泡、不播声音。
+      onCodexState: (state, migration, meta) => {
+        const diagMeta = {
+          observationId: meta?.observationId,
+          seq: meta?.seq,
+          fileAlias: meta?.fileAlias
+        }
+        appendCodexShadowDiagnostic(
+          state,
+          migration,
+          codexShadowDiagnosticPath(app.getPath('userData')),
+          diagMeta
+        )
+        appendCodexCandidateDiagnostic(
+          state,
+          migration,
+          codexCandidateDiagnosticPath(app.getPath('userData')),
+          diagMeta
+        )
+        const planned = planCodexSilentVisual(codexSilentVisualGate, {
+          enabled: getSettings().codexCandidateVisualEnabled,
+          derived: state,
+          fileAlias: meta?.fileAlias,
+          source: 'codex',
+          live: true
+        })
+        if (planned.applied && planned.presentation.petState) {
+          if (
+            !planned.presentation.showBubble &&
+            !planned.presentation.playSound &&
+            !planned.presentation.shouldNotify
+          ) {
+            const sentPose = sendPetState(
+              planned.presentation.petState,
+              silentVisualDurationMs(planned.presentation.petState)
+            )
+            if (
+              sentPose &&
+              planned.presentation.petState === 'attention' &&
+              planned.candidate.candidate === 'completed_with_partial_failure' &&
+              !getSettings().codexCandidateBubbleEnabled
+            ) {
+              const keys = codexSilentVisualGate
+                .snapshotSessions()
+                .filter(
+                  (slot) =>
+                    slot.candidate === 'completed_with_partial_failure' &&
+                    slot.attentionAcknowledged !== true
+                )
+                .map((slot) => slot.key)
+              if (keys.length) codexSilentVisualGate.acknowledgePresented(keys)
+            }
+          }
+        }
+        const bubbled = planCodexPartialFailureBubble(codexPartialFailureBubbleGate, {
+          enabled: getSettings().codexCandidateBubbleEnabled,
+          derived: state,
+          fileAlias: meta?.fileAlias,
+          source: 'codex',
+          live: true
+        })
+        if (
+          bubbled.presentation.showBubble &&
+          bubbled.presentation.text &&
+          !bubbled.presentation.sound &&
+          !bubbled.presentation.shouldNotify
+        ) {
+          const sentBubble = sendBubble(
+            bubbled.presentation.text,
+            'attention',
+            AGENT_TERMINAL_BUBBLE_MS,
+            false
+          )
+          if (sentBubble && bubbled.presentation.presentedSessionKeys.length) {
+            // 只改展示状态，同 tick 不 sendPetState(idle)，避免 OnSetState 清掉刚弹出的气泡。
+            codexSilentVisualGate.acknowledgePresented(bubbled.presentation.presentedSessionKeys)
+            const attentionResource = inspectRuntimeCodexAttentionSound()
+            const sounded = planCodexPartialFailureSound(codexPartialFailureSoundGate, {
+              enabled: getSettings().codexCandidateSoundEnabled,
+              derived: state,
+              fileAlias: meta?.fileAlias,
+              source: 'codex',
+              live: true,
+              bubbleActuallyPresented: true,
+              attentionAcknowledged: true,
+              bubblePending: false,
+              bubbleDedupeKey: bubbled.presentation.dedupeKey,
+              candidate: bubbled.candidate,
+              resourceAvailable: attentionResource.ok
+            })
+            appendCodexAttentionSoundDiagnostic(
+              {
+                reason: sounded.presentation.reason,
+                playSound: sounded.presentation.playSound,
+                soundType: sounded.presentation.soundType,
+                shouldNotify: false,
+                candidate: sounded.candidate.candidate,
+                fileAlias: meta?.fileAlias,
+                observationId: meta?.observationId
+              },
+              codexAttentionSoundDiagnosticPath(app.getPath('userData'))
+            )
+            if (
+              sounded.presentation.playSound &&
+              sounded.presentation.soundType === 'attention' &&
+              !sounded.presentation.shouldNotify &&
+              attentionResource.ok &&
+              attentionResource.dataUrl
+            ) {
+              sendCodexAttentionSound(attentionResource.dataUrl)
+            }
+          }
+        }
+      }
+      // 需要排查旧 Monitor 链路时，这里再注入 log 回调即可（MonitorDeps.log）。
     })
   } else {
     agentMonitor.updateConfig(config)
@@ -481,7 +670,8 @@ function applySettings(partial: Partial<Settings>): Snapshot {
       patchSettings({ petPosition: clamped })
     }
   }
-  // Agent 监控开关 / 环境集合变化时重启 monitor
+  // Agent 监控开关 / 环境集合变化时重启 monitor。
+  // Codex candidate 视觉/气泡开关只影响 onCodexState 的展示层，不得因此重启扫描或回放历史。
   const monitoringChanged = AGENT_SOURCE_LIST.some(
     (meta) =>
       before[meta.enabledKey] !== next[meta.enabledKey] ||

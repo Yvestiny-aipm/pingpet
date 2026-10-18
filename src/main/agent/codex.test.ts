@@ -87,11 +87,13 @@ describe('事件映射', () => {
     expect(kinds(scanCodex(NOW))).toEqual(['working'])
   })
 
-  it('task_complete → done/completed', () => {
+  it('task_complete → done/completed（协议结束，不是任务成功文案）', () => {
     session('s1', [meta({}), eventMsg('task_complete')])
     const e = scanCodex(NOW)[0]
     expect(e.kind).toBe('done')
     expect(e.reason).toBe('completed')
+    expect(e.message).toBe('Codex 这一轮结束了')
+    expect(e.message).not.toContain('完成了任务')
   })
 
   it('turn_aborted → failed/interrupted，并带上中断原因', () => {

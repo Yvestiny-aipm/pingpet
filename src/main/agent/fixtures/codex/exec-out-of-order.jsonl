@@ -1,0 +1,4 @@
+{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}
+{"type":"item.completed","item":{"id":"item_late","type":"agent_message","text":"late"}}
+{"type":"turn.started"}
+{"type":"thread.started","thread_id":"thread-late"}

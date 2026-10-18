@@ -9,6 +9,7 @@ import {
   PET_SCALE_MIN
 } from '@shared/defaults'
 import { AGENT_SOURCE_LIST } from '@shared/agents'
+import { sanitizeCodexCandidateSettings } from '@shared/codexCandidateSettings'
 import { AGENT_ENVS } from '@shared/types'
 import type { AgentEnv, BubbleAnchor, PetPosition, Settings } from '@shared/types'
 import { decryptSecret, encryptSecret, isEncryptedAtRest } from './secretStore'
@@ -148,6 +149,7 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
   if (typeof partial.agentCompletionSoundEnabled === 'boolean') {
     next.agentCompletionSoundEnabled = partial.agentCompletionSoundEnabled
   }
+  Object.assign(next, sanitizeCodexCandidateSettings(partial))
   if (typeof partial.autoRemoveBackground === 'boolean') {
     next.autoRemoveBackground = partial.autoRemoveBackground
   }

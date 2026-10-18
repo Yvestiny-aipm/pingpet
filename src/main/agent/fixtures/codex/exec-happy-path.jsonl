@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"thread-happy"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"ls","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"ls","status":"completed","exit_code":0}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Repo contains docs."}}
+{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":0,"output_tokens":4,"reasoning_output_tokens":0}}

@@ -25,6 +25,8 @@ files:
 extraResources:
   - from: resources/pet-packs/official
     to: pet-packs/official
+  - from: resources/sounds
+    to: sounds
 mac:
   target:
     - dmg

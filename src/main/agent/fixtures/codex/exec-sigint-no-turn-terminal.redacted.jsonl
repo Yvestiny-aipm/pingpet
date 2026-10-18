@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"thread-redacted"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item-error","type":"error"}}
+{"type":"item.completed","item":{"id":"item-msg","type":"agent_message"}}
+{"type":"item.started","item":{"id":"item-cmd","type":"command_execution","status":"in_progress"}}

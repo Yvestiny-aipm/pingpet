@@ -4,6 +4,7 @@ import type {
   AgentEventKind,
   AgentSource,
   BubblePayload,
+  CodexAttentionSoundPayload,
   DragPoint,
   PetApi,
   PetStatePayload,
@@ -52,6 +53,7 @@ const api: PetApi = {
   revealPetPacksFolder: () => ipcRenderer.invoke(IPC.RevealPetPacksFolder),
   onSnapshot: (cb) => subscribe<Snapshot>(IPC.OnSnapshot, cb),
   onShowBubble: (cb) => subscribe<BubblePayload>(IPC.OnShowBubble, cb),
+  onPlayCodexAttentionSound: (cb) => subscribe<CodexAttentionSoundPayload>(IPC.OnPlayCodexAttentionSound, cb),
   onHideBubble: (cb) => subscribe<void>(IPC.OnHideBubble, () => cb()),
   onSetState: (cb) => subscribe<PetStatePayload>(IPC.OnSetState, cb),
   onRecheckHover: (cb) => subscribe<WindowPoint>(IPC.OnRecheckHover, cb)

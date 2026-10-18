@@ -1,0 +1,162 @@
+@tailwind components;
+@tailwind utilities;
+
+body[data-route='settings'],
+body[data-route='settings'] html,
+body[data-route='settings'] #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #9f9f9f;
+  color: #111111;
+  font-family: "SF Pro Text", "PingFang SC", Inter, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.settings-proto-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: linear-gradient(180deg, #a5a5a5 0%, #9a9a9a 100%);
+}
+
+.settings-proto-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: top left;
+}
+
+body[data-route='settings'] button {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  margin: 0;
+  line-height: inherit;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+body[data-route='settings'] select,
+body[data-route='settings'] input[type='text'],
+body[data-route='settings'] input[type='password'],
+body[data-route='settings'] input:not([type]) {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  color: inherit;
+  font: inherit;
+  border-radius: 0;
+}
+
+body[data-route='settings'] select {
+  padding: 6px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.proto-dash-btn {
+  border: 1px dashed rgba(35, 35, 35, 0.34) !important;
+  background: rgba(255, 255, 255, 0.015) !important;
+  border-radius: 20px !important;
+}
+
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.light-glass {
+  background: rgba(255, 255, 255, 0.075);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.22),
+    0 18px 42px rgba(0, 0, 0, 0.08);
+}
+
+.rail-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 0.16em;
+}
+
+.proto-switch {
+  appearance: none;
+  width: 52px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(35, 35, 35, 0.22);
+  position: relative;
+  cursor: pointer;
+  transition: background 180ms ease-out;
+}
+
+.proto-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #f5f5f5;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+  transition: transform 180ms ease-out;
+}
+
+.proto-switch:checked {
+  background: #252527;
+}
+
+.proto-switch:checked::after {
+  transform: translateX(22px);
+}
+
+.proto-env-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(35, 35, 35, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #111111;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.proto-env-chip.is-on {
+  background: #b6bab9;
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+.proto-env-chip.is-off {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proto-motion {
+    animation: none !important;
+    transition: none !important;
+  }
+}
