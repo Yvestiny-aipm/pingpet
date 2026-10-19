@@ -67,9 +67,9 @@ function effectiveReason(event: AgentMonitorEvent): AgentStopReason {
  * AI 总结只替换第二行细节，不改动这行的事实性结论。
  */
 export function buildAgentBubbleHead(event: AgentMonitorEvent): string {
-  // Codex done 只是协议结束。即便误走到气泡路径，也不得写成任务成功。
+  // Codex done 只表示这一轮协议结束，不是任务成功。中性提醒 + 邀请回去看，不庆祝。
   if (event.source === 'codex' && event.kind === 'done') {
-    return `${SOURCE_NAME(event.source)} 这一轮结束了`
+    return `${SOURCE_NAME(event.source)} 这一轮结束了，回去看看`
   }
   return `${SOURCE_NAME(event.source)} ${STOP_REASON_PHRASE[effectiveReason(event)]}`
 }

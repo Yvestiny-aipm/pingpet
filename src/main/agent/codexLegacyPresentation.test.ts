@@ -10,16 +10,17 @@ import { AgentMonitor } from './monitor'
 import type { MonitorConfig } from './monitor'
 import { emptyCodexDerivedState } from './codexState'
 import {
-  CODEX_LEGACY_COMPLETION_NOTIFICATION_ENABLED,
+  CODEX_LEGACY_NEUTRAL_STOP_NOTIFICATION_ENABLED,
   countPresentableDone,
   isCelebratingPetState,
   isCodexLegacyProtocolComplete,
   looksLikeTaskSuccessCopy,
   petStateForPresentedKind,
+  petStateForTerminalBatch,
+  petStateForTerminalEvent,
   presentableTerminalEvents,
   shouldPlayAgentCompletionSound,
-  shouldPresentAgentTerminalToUser,
-  silentCodexCompletionPetState
+  shouldPresentAgentTerminalToUser
 } from './codexLegacyPresentation'
 
 const NOW = 1_700_000_000_000
@@ -50,12 +51,12 @@ function ev(
 }
 
 describe('Codex 旧路径完成提醒隔离', () => {
-  it('默认关闭 Codex 成功提示，且不把 done 改成 failed/unknown', () => {
-    expect(CODEX_LEGACY_COMPLETION_NOTIFICATION_ENABLED).toBe(false)
+  it('默认开启 Codex 中性提醒，但仍不把 done 改成 failed/unknown', () => {
+    expect(CODEX_LEGACY_NEUTRAL_STOP_NOTIFICATION_ENABLED).toBe(true)
     const done = ev('codex', 'done')
     expect(done.kind).toBe('done')
     expect(isCodexLegacyProtocolComplete(done)).toBe(true)
-    expect(shouldPresentAgentTerminalToUser(done)).toBe(false)
+    expect(shouldPresentAgentTerminalToUser(done)).toBe(true)
     expect(done.kind).not.toBe('failed')
     expect(done.kind).not.toBe('needs_attention')
   })
@@ -67,12 +68,12 @@ describe('Codex 旧路径完成提醒隔离', () => {
     expect(isCelebratingPetState(petStateForPresentedKind('working'))).toBe(false)
   })
 
-  it('Codex done 不弹成功气泡、不响完成音、不庆祝', () => {
+  it('Codex done 弹中性气泡，但不响完成音、不庆祝', () => {
     const done = ev('codex', 'done', { reason: 'completed', message: 'Codex 这一轮结束了' })
-    expect(shouldPresentAgentTerminalToUser(done)).toBe(false)
+    expect(shouldPresentAgentTerminalToUser(done)).toBe(true)
     expect(shouldPlayAgentCompletionSound([done])).toBe(false)
-    expect(isCelebratingPetState(silentCodexCompletionPetState())).toBe(false)
-    expect(silentCodexCompletionPetState()).toBe('idle')
+    expect(petStateForTerminalEvent(done)).toBe('idle')
+    expect(isCelebratingPetState(petStateForTerminalEvent(done))).toBe(false)
     expect(looksLikeTaskSuccessCopy(buildAgentBubbleHead(done))).toBe(false)
     expect(looksLikeTaskSuccessCopy(buildAgentBubbleText(done))).toBe(false)
     expect(buildAgentBubbleHead(done)).toContain('这一轮结束了')
@@ -94,19 +95,24 @@ describe('Codex 旧路径完成提醒隔离', () => {
   it('混合批次：只有非 Codex 的 done 才算完成音和「完成」条数', () => {
     const batch = [ev('codex', 'done'), ev('claude', 'done'), ev('cursor', 'failed')]
     const visible = presentableTerminalEvents(batch)
-    expect(visible.map((e) => e.source)).toEqual(['claude', 'cursor'])
-    expect(countPresentableDone(batch)).toBe(1)
+    expect(visible.map((e) => e.source)).toEqual(['codex', 'claude', 'cursor'])
+    expect(countPresentableDone(batch)).toBe(2)
     expect(shouldPlayAgentCompletionSound(batch)).toBe(true)
     expect(shouldPlayAgentCompletionSound([ev('codex', 'done'), ev('claude', 'failed')])).toBe(false)
+    expect(petStateForTerminalBatch(batch)).toBe('failed')
+    expect(petStateForTerminalBatch([ev('codex', 'done'), ev('claude', 'done')])).toBe('happy')
+    expect(petStateForTerminalBatch([ev('codex', 'done')])).toBe('idle')
   })
 
   it('Codex needs_attention / failed 不被误伤', () => {
     expect(shouldPresentAgentTerminalToUser(ev('codex', 'needs_attention'))).toBe(true)
     expect(shouldPresentAgentTerminalToUser(ev('codex', 'failed'))).toBe(true)
     expect(shouldPlayAgentCompletionSound([ev('codex', 'failed')])).toBe(false)
+    expect(petStateForTerminalEvent(ev('codex', 'needs_attention'))).toBe('attention')
+    expect(petStateForTerminalEvent(ev('codex', 'failed'))).toBe('failed')
   })
 
-  it('candidate 仍不接入 UI：shouldNotify=false，且旧 done 与 candidate 不会双通知', () => {
+  it('candidate 仍不接入 UI：shouldNotify=false；旧 done 只走中性提醒，不会双通知', () => {
     const completed = mapCodexDerivedToCandidate({
       ...emptyCodexDerivedState(NOW),
       lifecycle: 'completed_signal',
@@ -117,7 +123,8 @@ describe('Codex 旧路径完成提醒隔离', () => {
     expect(completed.candidate).toBe('completed_signal')
     expect(completed.shouldNotify).toBe(false)
     expect(completed.reasonCodes).toContain('not_succeeded')
-    expect(shouldPresentAgentTerminalToUser(ev('codex', 'done'))).toBe(false)
+    // 旧 done 现在会弹中性气泡，但 candidate 自己仍不通知；两者不是同一条通道
+    expect(shouldPresentAgentTerminalToUser(ev('codex', 'done'))).toBe(true)
 
     const stale = mapCodexDerivedToCandidate({
       ...emptyCodexDerivedState(NOW),
@@ -161,7 +168,7 @@ describe('scanCodex 内部兼容事件 + 用户文案', () => {
     )
   }
 
-  it('task_started 仍是 working；task_complete 仍是内部 done，但文案不是成功', () => {
+  it('task_started 仍是 working；task_complete 派发内部 done，弹中性提醒', () => {
     const iso = new Date(NOW).toISOString()
     write('s1', [
       { timestamp: iso, type: 'session_meta', payload: { originator: 'codex_cli', source: 'cli' } },
@@ -175,8 +182,9 @@ describe('scanCodex 内部兼容事件 + 用户文案', () => {
     expect(done.reason).toBe('completed')
     expect(done.message).toBe('Codex 这一轮结束了')
     expect(looksLikeTaskSuccessCopy(done.message)).toBe(false)
-    expect(shouldPresentAgentTerminalToUser(done)).toBe(false)
+    expect(shouldPresentAgentTerminalToUser(done)).toBe(true)
     expect(shouldPlayAgentCompletionSound([done])).toBe(false)
+    expect(petStateForTerminalEvent(done)).toBe('idle')
   })
 
   it('item/tool 失败后的 task_complete 仍不显示成功', () => {
@@ -193,7 +201,7 @@ describe('scanCodex 内部兼容事件 + 用户文案', () => {
     ])
     const done = scanCodex(NOW).find((e) => e.kind === 'done')!
     expect(done.kind).toBe('done')
-    expect(shouldPresentAgentTerminalToUser(done)).toBe(false)
+    expect(shouldPresentAgentTerminalToUser(done)).toBe(true)
     expect(looksLikeTaskSuccessCopy(buildAgentBubbleText(done))).toBe(false)
   })
 })
@@ -209,7 +217,7 @@ describe('Monitor priming 与旧路径派发', () => {
     mkdirSync(codexSessionsRoot(), { recursive: true })
   })
 
-  it('启动 priming 不重放历史完成通知；之后 task_complete 仍派发内部 done 但不对用户呈现成功', () => {
+  it('启动 priming 不重放历史完成通知；之后 task_complete 派发中性提醒', () => {
     const iso = new Date(clock).toISOString()
     writeFileSync(
       join(codexSessionsRoot(), 'hist.jsonl'),
@@ -239,6 +247,6 @@ describe('Monitor priming 与旧路径派发', () => {
     monitor.scanNow()
     const done = dispatched.find((e) => e.kind === 'done')
     expect(done).toBeTruthy()
-    expect(shouldPresentAgentTerminalToUser(done!)).toBe(false)
+    expect(shouldPresentAgentTerminalToUser(done!)).toBe(true)
   })
 })

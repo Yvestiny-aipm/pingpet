@@ -11,7 +11,7 @@ import {
 } from './codexBubblePresentation'
 import { mapCodexDerivedToCandidate } from './codexCandidate'
 import {
-  CODEX_LEGACY_COMPLETION_NOTIFICATION_ENABLED,
+  CODEX_LEGACY_NEUTRAL_STOP_NOTIFICATION_ENABLED,
   isCodexLegacyProtocolComplete,
   looksLikeTaskSuccessCopy,
   petStateForPresentedKind,
@@ -378,11 +378,11 @@ describe('用户行为隔离', () => {
     expect(mapped.shouldNotify).toBe(false)
   })
 
-  it('旧 Codex done 不恢复成功气泡', () => {
-    expect(CODEX_LEGACY_COMPLETION_NOTIFICATION_ENABLED).toBe(false)
+  it('旧 Codex done 只弹中性气泡，不恢复成功气泡', () => {
+    expect(CODEX_LEGACY_NEUTRAL_STOP_NOTIFICATION_ENABLED).toBe(true)
     const done = { source: 'codex' as const, kind: 'done' as const }
     expect(isCodexLegacyProtocolComplete(done)).toBe(true)
-    expect(shouldPresentAgentTerminalToUser(done)).toBe(false)
+    expect(shouldPresentAgentTerminalToUser(done)).toBe(true)
     expect(silentCodexCompletionPetState()).toBe('idle')
     const planned = planCodexPartialFailureBubble(new CodexPartialFailureBubbleGate(), {
       enabled: true,

@@ -15,7 +15,7 @@ import {
 } from './codexSoundPresentation'
 import { mapCodexDerivedToCandidate } from './codexCandidate'
 import {
-  CODEX_LEGACY_COMPLETION_NOTIFICATION_ENABLED,
+  CODEX_LEGACY_NEUTRAL_STOP_NOTIFICATION_ENABLED,
   isCodexLegacyProtocolComplete,
   petStateForPresentedKind,
   shouldPlayAgentCompletionSound,
@@ -446,12 +446,12 @@ describe('去重、新 turn 与多 session', () => {
 })
 
 describe('用户行为隔离与生命周期', () => {
-  it('15. 旧 Codex done 不触发声音', () => {
-    expect(CODEX_LEGACY_COMPLETION_NOTIFICATION_ENABLED).toBe(false)
+  it('15. 旧 Codex done 不触发声音（只保留中性气泡）', () => {
+    expect(CODEX_LEGACY_NEUTRAL_STOP_NOTIFICATION_ENABLED).toBe(true)
     const done = { source: 'codex' as const, kind: 'done' as const }
     expect(isCodexLegacyProtocolComplete(done)).toBe(true)
     expect(shouldPlayAgentCompletionSound([done])).toBe(false)
-    expect(shouldPresentAgentTerminalToUser(done)).toBe(false)
+    expect(shouldPresentAgentTerminalToUser(done)).toBe(true)
     const planned = planSound(new CodexPartialFailureSoundGate(), completedSignal(), {
       bubbleActuallyPresented: true,
       attentionAcknowledged: true

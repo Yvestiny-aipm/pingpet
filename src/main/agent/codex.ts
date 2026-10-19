@@ -100,11 +100,26 @@ export function getCodexLineTimestampMs(line: Record<string, unknown>): number {
   return 0
 }
 
+export interface ClassifyCodexLegacyLineOptions {
+  /**
+   * 仅回放 / 历史报告用：复现修复前「assistant 正文可判终态」的行为。
+   * 生产扫描不得打开——长任务里“第一步完成了，接下来……”极常见，
+   * 由正文触发 done 会在任务中途误报结束。
+   */
+  allowAssistantTextTerminal?: boolean
+}
+
 /**
  * 旧路径单行判定（与 parseCodexFile 同一套规则）。
  * 回放不得把 assistant 正文带出；调用方如需气泡文案，仍由 parseCodexFile 本地拼。
+ *
+ * 终态只认结构化事件：task_complete / turn_aborted。
+ * assistant 正文默认不产出任何事件；只有回放显式打开选项时才复现旧行为。
  */
-export function classifyCodexLegacyLine(line: Record<string, unknown>): CodexLegacySignal | null {
+export function classifyCodexLegacyLine(
+  line: Record<string, unknown>,
+  options: ClassifyCodexLegacyLineOptions = {}
+): CodexLegacySignal | null {
   const type = line.type
   const payload =
     line.payload && typeof line.payload === 'object' ? (line.payload as Record<string, unknown>) : {}
@@ -139,6 +154,10 @@ export function classifyCodexLegacyLine(line: Record<string, unknown>): CodexLeg
       }
     }
     if (payloadType === 'message' && payload.role === 'assistant') {
+      // 生产路径：assistant 正文只说明“它说了一句话”，不代表这一轮结束。
+      // 长任务里“第一步完成了，接下来……”极常见；由正文触发 done 会在中途误报。
+      // 回放/历史报告显式打开选项时，才复现旧的文本终态行为。
+      if (!options.allowAssistantTextTerminal) return null
       const text = extractOutputText(payload)
       const classified = classifyStopText(text)
       if (classified) {
@@ -183,22 +202,47 @@ function parseCodexFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
   // 在这里就跳过，省掉后面的文本分类开销（1 秒一轮，白做的量很可观）。
   const oldestMs = nowMs - AGENT_EVENT_FRESH_MS
 
+  // 最近一条 assistant 正文。只在 task_complete 时用来判断“是不是在等你”，
+  // 绝不单独拿它当终态；每个新 task_started 都会重置，避免上一轮的话污染这一轮。
+  let lastAssistantText = ''
+
   for (const line of lines) {
+    const payload =
+      line.payload && typeof line.payload === 'object'
+        ? (line.payload as Record<string, unknown>)
+        : {}
+
+    if (line.type === 'response_item' && payload.type === 'message' && payload.role === 'assistant') {
+      const text = extractOutputText(payload)
+      if (text) lastAssistantText = text
+    }
+
     const classified = classifyCodexLegacyLine(line)
     if (!classified) continue
+
+    if (classified.via === 'event_msg.task_started') lastAssistantText = ''
+
     const tsMs = classified.timestampMs || nowMs
     if (tsMs < oldestMs) continue
 
+    if (classified.via === 'event_msg.task_complete') {
+      const hint = classifyStopText(lastAssistantText)
+      // 只在“最后一句明确在等你”时改成 needs_attention。
+      // 仍然不允许文本产出 done / failed：文本可以请你回来，不能宣布任务结束或出错。
+      if (hint?.kind === 'needs_attention') {
+        classified.kind = 'needs_attention'
+        classified.reason = 'needs_input'
+        classified.detail = hint.detail
+      }
+    }
+
     let message = ''
     if (classified.via === 'event_msg.task_started') message = 'Codex 开始处理任务'
-    else if (classified.via === 'event_msg.task_complete') message = 'Codex 这一轮结束了'
-    else if (classified.via === 'event_msg.turn_aborted') message = 'Codex 任务被中断'
+    else if (classified.via === 'event_msg.task_complete') {
+      message = classified.kind === 'needs_attention' ? 'Codex 停下来了，需要你处理' : 'Codex 这一轮结束了'
+    } else if (classified.via === 'event_msg.turn_aborted') message = 'Codex 任务被中断'
     else if (classified.via === 'response_item.reasoning' || classified.via === 'response_item.function_call') {
       message = 'Codex 正在处理任务'
-    } else if (classified.via === 'response_item.assistant_text') {
-      message = extractOutputText(
-        line.payload && typeof line.payload === 'object' ? (line.payload as Record<string, unknown>) : {}
-      ).slice(0, 200)
     }
 
     events.push({

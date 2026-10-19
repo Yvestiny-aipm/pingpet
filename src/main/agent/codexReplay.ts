@@ -275,7 +275,11 @@ function classifyOldPathObservation(
     return { kind: 'failed', via: 'event_msg.turn_aborted', timestampMs }
   }
   if (event.eventType === 'response_item' && event.payload && typeof event.payload === 'object') {
-    const classified = classifyCodexLegacyLine(event.payload as Record<string, unknown>)
+    // 回放要复现修复前的旧路径（含 assistant 正文判 done），否则对照报告会失真。
+    // 生产扫描不传这个选项，正文不再产出终态。
+    const classified = classifyCodexLegacyLine(event.payload as Record<string, unknown>, {
+      allowAssistantTextTerminal: true
+    })
     if (classified) {
       return { kind: classified.kind, via: classified.via, timestampMs: classified.timestampMs || timestampMs }
     }

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AgentMonitorEvent } from '@shared/types'
-import { codexSessionsRoot, scanCodex } from './codex'
+import { classifyCodexLegacyLine, codexSessionsRoot, scanCodex } from './codex'
 
 /**
  * Codex 这边最关键的是环境判定：客户端和 VS Code 的 session_meta 里 source 都是 'vscode'，
@@ -109,14 +109,56 @@ describe('事件映射', () => {
     expect(kinds(scanCodex(NOW))).toEqual(['working', 'working'])
   })
 
-  it('assistant 文本能判出停下原因时才成为终态事件', () => {
+  it('assistant 正文不再产出终态事件（即使写“已完成”）', () => {
     session('s1', [meta({}), assistantMsg('已完成，改动都提交了')])
-    expect(kinds(scanCodex(NOW))).toEqual(['done'])
+    expect(scanCodex(NOW)).toEqual([])
   })
 
-  it('assistant 文本判不出类别时不产出事件（避免每句话都提醒）', () => {
-    session('s1', [meta({}), assistantMsg('嗯，我看一下')])
-    expect(scanCodex(NOW)).toEqual([])
+  it('长任务中途说“完成”不提前报结束，只有 task_complete 才结束', () => {
+    session('long', [
+      meta({}),
+      eventMsg('task_started', {}, -6_000),
+      assistantMsg('第一步完成了，接下来继续', -5_000),
+      responseItem({ type: 'reasoning' }, -4_000),
+      assistantMsg('第二步也完成了', -3_000),
+      eventMsg('task_complete', {}, -1_000)
+    ])
+    const events = scanCodex(NOW)
+    expect(events.map((e) => e.kind)).toEqual(['working', 'working', 'done'])
+    expect(events.filter((e) => e.kind === 'done')).toHaveLength(1)
+    expect(events.at(-1)?.reason).toBe('completed')
+  })
+
+  it('task_complete 前最后一句在等用户 → needs_attention，而不是 done', () => {
+    session('ask', [
+      meta({}),
+      eventMsg('task_started', {}, -3_000),
+      assistantMsg('请选择一个：继续还是停止？', -2_000),
+      eventMsg('task_complete', {}, -1_000)
+    ])
+    const last = scanCodex(NOW).at(-1)!
+    expect(last.kind).toBe('needs_attention')
+    expect(last.reason).toBe('needs_input')
+    expect(last.detail).toContain('请选择一个')
+  })
+
+  it('上一轮的“等你”不会污染下一轮', () => {
+    session('cross', [
+      meta({}),
+      eventMsg('task_started', {}, -10 * 60_000),
+      assistantMsg('请选择一个：A 还是 B？', -9 * 60_000),
+      eventMsg('task_complete', {}, -8 * 60_000),
+      eventMsg('task_started', {}, -3_000),
+      eventMsg('task_complete', {}, -1_000)
+    ])
+    expect(scanCodex(NOW).at(-1)?.kind).toBe('done')
+  })
+
+  it('回放模式仍可复现修复前的文本终态（仅诊断，不用于生产）', () => {
+    const line = assistantMsg('已完成，改动都提交了') as Record<string, unknown>
+    expect(classifyCodexLegacyLine(line)).toBeNull()
+    const replay = classifyCodexLegacyLine(line, { allowAssistantTextTerminal: true })
+    expect(replay?.kind).toBe('done')
   })
 
   it('token_count 之类的噪声行不产出事件', () => {

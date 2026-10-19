@@ -1,12 +1,13 @@
 import type { AgentEventKind, AgentMonitorEvent, PetState } from '@shared/types'
 
 /**
- * Codex 旧路径「协议完成」是否还对用户发成功提醒。
+ * Codex 旧路径「协议完成」是否向用户发中性提醒。
  *
- * 默认关闭：task_complete / kind=done 只表示协议轮次结束，不是任务语义成功。
- * 不得把这个开关理解成接入了 candidate 可见层。
+ * 打开后：task_complete / kind=done 会弹一条「Codex 这一轮结束了，回去看看」的中性气泡。
+ * 仍然不做：不响完成音、不切 happy/celebrating、不把 done 解释成任务成功。
+ * 这是旧 Monitor 的兼容路径，不是 candidate 可见层；candidate 仍 shouldNotify=false。
  */
-export const CODEX_LEGACY_COMPLETION_NOTIFICATION_ENABLED = false
+export const CODEX_LEGACY_NEUTRAL_STOP_NOTIFICATION_ENABLED = true
 
 export type AgentTerminalLike = Pick<AgentMonitorEvent, 'source' | 'kind'>
 
@@ -16,14 +17,12 @@ export function isCodexLegacyProtocolComplete(event: AgentTerminalLike): boolean
 }
 
 /**
- * 终态事件要不要弹气泡 / 出完成音 / 切 celebrating。
- * 只隔离 source=codex 的 done；其他 Agent 与 Codex 的 working/failed/needs_attention 不变。
+ * 终态事件要不要弹气泡。
+ * Codex done 走中性提醒（见上面的开关）；其他 Agent 与 Codex 的 failed/needs_attention 不变。
  */
 export function shouldPresentAgentTerminalToUser(event: AgentTerminalLike): boolean {
   if (event.kind === 'working') return false
-  if (isCodexLegacyProtocolComplete(event) && !CODEX_LEGACY_COMPLETION_NOTIFICATION_ENABLED) {
-    return false
-  }
+  if (isCodexLegacyProtocolComplete(event)) return CODEX_LEGACY_NEUTRAL_STOP_NOTIFICATION_ENABLED
   return event.kind === 'done' || event.kind === 'needs_attention' || event.kind === 'failed'
 }
 
@@ -60,6 +59,22 @@ export function petStateForPresentedKind(kind: AgentEventKind): PetState {
     case 'failed':
       return 'failed'
   }
+}
+
+/** 单条终态事件对应的宠物姿态：Codex 的协议完成只回 idle，不庆祝。 */
+export function petStateForTerminalEvent(event: AgentTerminalLike): PetState {
+  if (isCodexLegacyProtocolComplete(event)) return silentCodexCompletionPetState()
+  return petStateForPresentedKind(event.kind)
+}
+
+/** 多条终态合并时的姿态：失败 > 需要你 > 有真实完成则 happy > 只有 Codex 协议完成则 idle。 */
+export function petStateForTerminalBatch(events: readonly AgentTerminalLike[]): PetState {
+  if (events.some((event) => event.kind === 'failed')) return 'failed'
+  if (events.some((event) => event.kind === 'needs_attention')) return 'attention'
+  if (events.length > 0 && events.every(isCodexLegacyProtocolComplete)) {
+    return silentCodexCompletionPetState()
+  }
+  return 'happy'
 }
 
 const SUCCESS_HINTS = ['任务已完成', '任务完成', '完成了任务', 'celebrat']

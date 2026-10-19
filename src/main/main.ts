@@ -54,11 +54,10 @@ import { AgentMonitor } from './agent/monitor'
 import type { MonitorConfig } from './agent/monitor'
 import {
   isCodexLegacyProtocolComplete,
-  petStateForPresentedKind,
+  petStateForTerminalBatch,
+  petStateForTerminalEvent,
   presentableTerminalEvents,
-  shouldPlayAgentCompletionSound,
-  shouldPresentAgentTerminalToUser,
-  silentCodexCompletionPetState
+  shouldPlayAgentCompletionSound
 } from './agent/codexLegacyPresentation'
 import {
   CodexPartialFailureBubbleGate,
@@ -333,17 +332,13 @@ const codexSilentVisualGate = new CodexSilentVisualGate()
 const codexPartialFailureBubbleGate = new CodexPartialFailureBubbleGate()
 const codexPartialFailureSoundGate = new CodexPartialFailureSoundGate()
 
-/** Agent 状态 → 宠物状态。其他 Agent 的 done 仍复用 happy；Codex done 不走这里。 */
-function agentKindToPetState(kind: AgentEventKind): PetState {
-  return petStateForPresentedKind(kind)
-}
-
 /**
  * 统一处理一条 Agent 事件。
  * v0.2.1 行为（用户要求）：只有 Agent「停下来」时才弹气泡，且气泡说清停下的原因。
  *   - working：Agent 正在干活。只切宠物为 thinking（安静的思考视觉），绝不弹气泡。
  *   - 其他 Agent 的 done / needs_attention / failed：弹一条说明「为什么停」的气泡。
- *   - Codex 的 done：只是协议轮次结束，不是任务成功。保留内部事件，不弹成功气泡、不响完成音、不庆祝。
+ *   - Codex 的 done：只认 task_complete 这类明确轮次结束信号；弹中性气泡，
+ *     但不说“任务完成”、不响完成音、不庆祝。长任务中途的 assistant 正文不再触发终态。
  */
 function handleAgentEvent(event: AgentMonitorEvent): void {
   // v0.3.3：无总开关。两个子开关都关时 monitor 根本不 tick，这里无需再挡。
@@ -355,17 +350,6 @@ function handleAgentEvent(event: AgentMonitorEvent): void {
       sendPetState('thinking', AGENT_THINKING_STATE_MS)
     }
     // 诊断区（活跃会话/最近事件）也可能变了，广播刷新设置页
-    broadcastSnapshot()
-    return
-  }
-
-  if (!shouldPresentAgentTerminalToUser(event)) {
-    if (
-      isCodexLegacyProtocolComplete(event) &&
-      shouldLegacyCodexDrivePetVisual(candidateVisualOn, event)
-    ) {
-      sendPetState(silentCodexCompletionPetState(), AGENT_THINKING_STATE_MS)
-    }
     broadcastSnapshot()
     return
   }
@@ -400,26 +384,23 @@ async function flushTerminalBubbles(): Promise<void> {
     const ai = await summarizeAgentStop(e, getSettings())
     const text = ai ? `${buildAgentBubbleHead(e)}\n${ai}` : buildAgentBubbleText(e)
     const durationMs = ai ? AGENT_AI_BUBBLE_MS : AGENT_TERMINAL_BUBBLE_MS
-    sendBubble(text, agentKindToPetState(e.kind), durationMs, sound)
+    sendBubble(text, petStateForTerminalEvent(e), durationMs, sound)
     return
   }
 
-  // 多个：合并成一句摘要。宠物状态优先级 failed > needs_attention > done
-  const kinds = new Set(batch.map((e) => e.kind))
-  const worst: AgentEventKind = kinds.has('failed')
-    ? 'failed'
-    : kinds.has('needs_attention')
-      ? 'needs_attention'
-      : 'done'
-  const doneN = batch.filter((e) => e.kind === 'done').length
+  // 多个：合并成一句摘要。宠物状态优先级 failed > needs_attention > 有真实完成 > 只有 Codex 轮次结束
+  const codexDoneN = batch.filter((e) => isCodexLegacyProtocolComplete(e)).length
+  const doneN = batch.filter((e) => e.kind === 'done' && !isCodexLegacyProtocolComplete(e)).length
   const needN = batch.filter((e) => e.kind === 'needs_attention').length
   const failN = batch.filter((e) => e.kind === 'failed').length
   const parts: string[] = []
+  // Codex 的“结束了一轮”与真正完成分开说，避免把轮次结束说成任务完成
+  if (codexDoneN) parts.push(`${codexDoneN} 个结束了一轮`)
   if (doneN) parts.push(`${doneN} 个完成`)
   if (needN) parts.push(`${needN} 个需要你`)
   if (failN) parts.push(`${failN} 个出错/中断`)
-  const text = `${batch.length} 个任务停下来了：${parts.join('，')}`
-  sendBubble(text, agentKindToPetState(worst), AGENT_TERMINAL_BUBBLE_MS, sound)
+  const text = `${batch.length} 个 Agent 停下来了：${parts.join('，')}`
+  sendBubble(text, petStateForTerminalBatch(batch), AGENT_TERMINAL_BUBBLE_MS, sound)
 }
 
 function agentStatus(): AgentMonitorStatus {
