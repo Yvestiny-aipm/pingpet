@@ -118,20 +118,22 @@ export function createPetWindow(position: PetPosition): BrowserWindow {
 
 export function createSettingsWindow(): BrowserWindow {
   const { workArea } = screen.getPrimaryDisplay()
-  const width = Math.min(1280, Math.max(960, workArea.width - 120))
-  const height = Math.min(860, Math.max(700, workArea.height - 80))
+  const width = Math.min(1180, Math.max(940, workArea.width - 140))
+  const height = Math.min(820, Math.max(660, workArea.height - 96))
   const win = new BrowserWindow({
     width,
     height,
-    minWidth: 960,
-    minHeight: 700,
+    minWidth: 900,
+    minHeight: 640,
     show: false,
     resizable: true,
     maximizable: true,
     fullscreenable: false,
-    backgroundColor: '#9f9f9f',
-    title: '桌宠设置',
+    // 和设置台暖纸底色一致，避免窗口出现/缩放时闪一下灰底
+    backgroundColor: '#f2f0e9',
+    title: 'PingPet 设置',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
+    trafficLightPosition: process.platform === 'darwin' ? { x: 18, y: 17 } : undefined,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

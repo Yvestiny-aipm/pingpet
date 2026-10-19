@@ -12,7 +12,7 @@ export default function App(): JSX.Element {
   const [route] = useState<Route>(currentRoute)
 
   useEffect(() => {
-    document.title = route === 'settings' ? '桌宠设置' : '桌宠'
+    document.title = route === 'settings' ? 'PingPet 设置' : 'PingPet'
     document.body.dataset.route = route
   }, [route])
 

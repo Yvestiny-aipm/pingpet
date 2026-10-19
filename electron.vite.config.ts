@@ -18,7 +18,8 @@ function injectCsp(): Plugin {
     transformIndexHtml(html) {
       return html.replace(
         '<head>',
-        `<head>\n    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />`
+        // img-src 额外放行 file:（导入的皮肤包）与 https:（PetDex 在线形象库的缩略图精灵图）
+        `<head>\n    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file: https:" />`
       )
     }
   }

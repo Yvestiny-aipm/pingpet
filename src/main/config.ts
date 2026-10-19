@@ -45,7 +45,7 @@ const SOURCE_NAME = (source: AgentSource): string => AGENT_SOURCES[source].label
 /** 每种停止原因对应一句主文案（不含来源名和细节） */
 const STOP_REASON_PHRASE: Record<AgentStopReason, string> = {
   completed: '输出结束了，任务完成 ✅',
-  needs_input: '停下来了，需要你处理一下 🙋',
+  needs_input: '需要你处理一下 🙋',
   error: '出错停下了 ⚠️',
   interrupted: '输出被中断了 ⛔'
 }

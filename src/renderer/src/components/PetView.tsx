@@ -394,10 +394,11 @@ export default function PetView(): JSX.Element {
         <div key={stateSeq} className={`pet-anim pet-anim--${state}`}>
           {selectedPet && <PetSprite pet={selectedPet} state={state} />}
         </div>
-        {state === 'sleepy' && <div className="pet-emote pet-emote--zzz">z z</div>}
-        {state === 'attention' && <div className="pet-emote pet-emote--alert">!</div>}
-        {state === 'thinking' && <div className="pet-emote pet-emote--think">…</div>}
-        {state === 'failed' && <div className="pet-emote pet-emote--fail">×</div>}
+        {/* 气泡已经说明了状态；气泡打开时不再叠表情角标，避免和头顶气泡互相遮挡 */}
+        {!bubble && state === 'sleepy' && <div className="pet-emote pet-emote--zzz">z z</div>}
+        {!bubble && state === 'attention' && <div className="pet-emote pet-emote--alert">!</div>}
+        {!bubble && state === 'thinking' && <div className="pet-emote pet-emote--think">…</div>}
+        {!bubble && state === 'failed' && <div className="pet-emote pet-emote--fail">×</div>}
       </div>
     </div>
   )

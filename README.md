@@ -28,6 +28,8 @@ PingPet 是一只常驻桌面的透明置顶小桌宠。它安静地趴在屏幕
 
 ## 核心功能
 
+> 逐项功能、版本状态与隐私边界见 [docs/功能清单.md](docs/功能清单.md)。
+
 ### 1. 盯着你的 AI 干活（Agent 监控）
 
 <img src="docs/screenshots/home-watch.png" alt="监控能力介绍" />
