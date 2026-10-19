@@ -67,7 +67,6 @@ export default function BubblePage({ pet, settings, onPatch }: BubblePageProps):
   return (
     <div className="pp-page">
       <PageHead
-        eyebrow="COMPANION BUBBLES"
         title="陪伴气泡"
         subtitle="偶尔说一句，平时安静陪着。和 Agent 的工作提醒是两套独立的气泡。"
       />

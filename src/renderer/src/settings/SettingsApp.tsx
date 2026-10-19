@@ -3,9 +3,11 @@ import {
   Activity,
   Images,
   MessageCircle,
+  Moon,
   PawPrint,
   Settings2,
   Sparkles,
+  Sun,
   X
 } from 'lucide-react'
 import { AGENT_SOURCE_LIST } from '@shared/agents'
@@ -77,6 +79,7 @@ export default function SettingsApp(): JSX.Element {
   const [aiTestResult, setAiTestResult] = useState<AiTestResult | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [dialog, setDialog] = useState<DialogState | null>(null)
+  const theme = snapshot?.settings.theme ?? 'light'
   const [renameDraft, setRenameDraft] = useState('')
   const toastTimer = useRef<number | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -101,6 +104,12 @@ export default function SettingsApp(): JSX.Element {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 })
   }, [page])
+
+  // 主题写到 body，CSS 变量与原生表单控件一起切换
+  useEffect(() => {
+    document.body.dataset.theme = theme
+    document.documentElement.style.colorScheme = theme
+  }, [theme])
 
   useEffect(() => {
     return () => {
@@ -334,6 +343,27 @@ export default function SettingsApp(): JSX.Element {
             </div>
           ))}
         </nav>
+
+        <div className="pp-theme-toggle" role="group" aria-label="主题">
+          <button
+            type="button"
+            className={theme === 'light' ? 'is-active' : ''}
+            aria-pressed={theme === 'light'}
+            onClick={() => patch({ theme: 'light' })}
+          >
+            <Sun size={13} />
+            浅色
+          </button>
+          <button
+            type="button"
+            className={theme === 'dark' ? 'is-active' : ''}
+            aria-pressed={theme === 'dark'}
+            onClick={() => patch({ theme: 'dark' })}
+          >
+            <Moon size={13} />
+            深色
+          </button>
+        </div>
 
         <button type="button" className="pp-status-card" onClick={toggleVisible}>
           <span className={`pp-status-card__dot${settings.petVisible ? ' is-live' : ''}`} />

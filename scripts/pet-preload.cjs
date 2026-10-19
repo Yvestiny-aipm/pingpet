@@ -3,6 +3,7 @@ const { contextBridge } = require('electron')
 
 const snapshot = {
   settings: {
+    theme: 'light',
     selectedPetId: 'dango',
     petScale: 1,
     bubblesEnabled: true,
@@ -57,6 +58,7 @@ const snapshot = {
 let bubbleCb = null
 let stateCb = null
 let hideCb = null
+let snapshotCb = null
 
 contextBridge.exposeInMainWorld('petApi', {
   getSnapshot: async () => structuredClone(snapshot),
@@ -82,7 +84,12 @@ contextBridge.exposeInMainWorld('petApi', {
   deleteImportedPetPack: async () => structuredClone(snapshot),
   renameImportedPetPack: async () => structuredClone(snapshot),
   revealPetPacksFolder: async () => undefined,
-  onSnapshot: () => () => undefined,
+  onSnapshot: (cb) => {
+    snapshotCb = cb
+    return () => {
+      snapshotCb = null
+    }
+  },
   onShowBubble: (cb) => {
     bubbleCb = cb
     return () => {
@@ -108,5 +115,9 @@ contextBridge.exposeInMainWorld('petApi', {
 contextBridge.exposeInMainWorld('petDemo', {
   bubble: (payload) => bubbleCb && bubbleCb(payload),
   hideBubble: () => hideCb && hideCb(),
-  state: (state, durationMs) => stateCb && stateCb({ state, durationMs })
+  state: (state, durationMs) => stateCb && stateCb({ state, durationMs }),
+  theme: (theme) => {
+    snapshot.settings.theme = theme
+    if (snapshotCb) snapshotCb(structuredClone(snapshot))
+  }
 })

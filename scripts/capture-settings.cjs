@@ -18,6 +18,18 @@ async function capture(win, name) {
   writeFileSync(join(outDir, `${name}.png`), image.toPNG())
 }
 
+async function clickTheme(win, label) {
+  await win.webContents.executeJavaScript(
+    `(() => {
+      const target = [...document.querySelectorAll('.pp-theme-toggle button')]
+        .find((el) => el.textContent.includes(${JSON.stringify(label)}))
+      if (target) target.click()
+      return Boolean(target)
+    })()`
+  )
+  await wait(600)
+}
+
 async function clickNav(win, label) {
   await win.webContents.executeJavaScript(
     `(() => {
@@ -36,7 +48,7 @@ app.whenReady().then(async () => {
     width: 1180,
     height: 800,
     show: false,
-    backgroundColor: '#f2f0e9',
+    backgroundColor: '#f5f5f7',
     webPreferences: {
       preload: join(__dirname, 'capture-preload.cjs'),
       sandbox: false,
@@ -77,13 +89,29 @@ app.whenReady().then(async () => {
   await wait(450)
   await capture(win, '08-pet-imported')
 
-  // 最小窗口尺寸下的布局检查
+  // 深色主题
+  await clickTheme(win, '深色')
+  await clickNav(win, '桌宠')
+  await capture(win, '09-dark-pet')
+  await clickNav(win, '形象库')
+  await capture(win, '10-dark-gallery')
+  await clickNav(win, '陪伴气泡')
+  await capture(win, '11-dark-bubble')
+  await clickNav(win, 'Agent 监控')
+  await capture(win, '12-dark-agent')
+  await clickNav(win, 'AI 总结')
+  await capture(win, '13-dark-ai')
+  await clickNav(win, '通用设置')
+  await capture(win, '14-dark-general')
+
+  // 最小窗口尺寸下的布局检查（回到浅色）
+  await clickTheme(win, '浅色')
   win.setSize(920, 680)
   await wait(600)
   await clickNav(win, '桌宠')
-  await capture(win, '12-pet-narrow')
+  await capture(win, '15-pet-narrow')
   await clickNav(win, 'AI 总结')
-  await capture(win, '13-ai-narrow')
+  await capture(win, '16-ai-narrow')
 
   app.quit()
 })

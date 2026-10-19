@@ -50,17 +50,32 @@ app.whenReady().then(async () => {
     })`
   )
   await wait(500)
-  await capture(win, '09-pet-bubble')
+  await capture(win, '17-pet-bubble')
 
   await win.webContents.executeJavaScript(`window.petDemo.hideBubble()`)
   await wait(250)
   await win.webContents.executeJavaScript(`window.petDemo.state('thinking', 60000)`)
   await wait(350)
-  await capture(win, '10-pet-thinking')
+  await capture(win, '18-pet-thinking')
 
   await win.webContents.executeJavaScript(`window.petDemo.state('failed', 60000)`)
   await wait(350)
-  await capture(win, '11-pet-failed')
+  await capture(win, '19-pet-failed')
+
+  // 深色主题下的气泡
+  await win.webContents.executeJavaScript(`window.petDemo.theme('dark')`)
+  await wait(350)
+  await win.webContents.executeJavaScript(
+    `window.petDemo.bubble({
+      text: 'Claude Code 需要你处理一下 🙋\\n是否允许运行 npm test 验证表单校验改动？',
+      state: 'attention',
+      durationMs: 60000,
+      windowRect: ${JSON.stringify(bounds)},
+      displayBounds: { x: 0, y: 0, width: 1440, height: 900 }
+    })`
+  )
+  await wait(500)
+  await capture(win, '20-dark-pet-bubble')
 
   app.quit()
 })

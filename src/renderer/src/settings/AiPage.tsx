@@ -38,7 +38,6 @@ export default function AiPage(props: AiPageProps): JSX.Element {
   return (
     <div className="pp-page">
       <PageHead
-        eyebrow="STOP SUMMARY"
         title="AI 总结"
         subtitle="任务停下时，用一句人话告诉你发生了什么。用你自己的模型，Key 只存在本机。"
         actions={

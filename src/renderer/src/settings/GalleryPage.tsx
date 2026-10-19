@@ -156,7 +156,6 @@ export default function GalleryPage({ pets, onInstalled, notify }: GalleryPagePr
   return (
     <div className="pp-page">
       <PageHead
-        eyebrow="PETDEX GALLERY"
         title="形象库"
         subtitle={
           status === 'ready'
@@ -175,7 +174,7 @@ export default function GalleryPage({ pets, onInstalled, notify }: GalleryPagePr
         }
       />
 
-      <Callout tone="sage" icon={<Globe2 size={16} />}>
+      <Callout tone="neutral" icon={<Globe2 size={16} />}>
         <strong>打开这个页面会联网</strong>
         <span>
           只会向 petdex.dev 获取公开的形象列表；点安装时才下载对应的精灵图资源。

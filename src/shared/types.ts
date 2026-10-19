@@ -97,6 +97,9 @@ export interface Settings extends AgentMonitoringSettings {
   /** OpenAI 兼容接口的模型 ID */
   aiOpenaiModel: string
 
+  /** v0.7：客户端主题。浅色白底天蓝强调 / 深色近黑底紫色强调 */
+  theme: ThemeMode
+
   // ---- v0.6.2 新版本提醒 ----
   /**
    * 是否定期查一下 GitHub 上有没有新版本。
@@ -104,6 +107,9 @@ export interface Settings extends AgentMonitoringSettings {
    */
   updateCheckEnabled: boolean
 }
+
+/** v0.7：客户端主题 */
+export type ThemeMode = 'light' | 'dark'
 
 /** v0.5：AI 总结的模型服务。openai = 任意 OpenAI 兼容接口（含 DeepSeek/Ollama 等） */
 export type AiProvider = 'anthropic' | 'openai'

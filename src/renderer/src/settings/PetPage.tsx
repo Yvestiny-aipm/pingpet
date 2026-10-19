@@ -60,7 +60,6 @@ export default function PetPage(props: PetPageProps): JSX.Element {
   const currentPet =
     pets.find((pet) => pet.id === settings.selectedPetId) ?? pets[0] ?? null
   const importedCount = pets.filter((pet) => pet.source === 'imported').length
-  const officialCount = pets.length - importedCount
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -82,7 +81,6 @@ export default function PetPage(props: PetPageProps): JSX.Element {
   return (
     <div className="pp-page">
       <PageHead
-        eyebrow="DESKTOP COMPANION"
         title="我的桌宠"
         subtitle="挑一只喜欢的小伙伴，让它安静住在你的桌面。"
         actions={
@@ -95,7 +93,6 @@ export default function PetPage(props: PetPageProps): JSX.Element {
       {currentPet && (
         <section className="pp-hero">
           <div className="pp-hero__copy">
-            <div className="pp-eyebrow">CURRENT COMPANION</div>
             <h2>{currentPet.name}</h2>
             <p>{currentPet.description}</p>
             <div className="pp-hero__status">
@@ -131,30 +128,11 @@ export default function PetPage(props: PetPageProps): JSX.Element {
         </section>
       )}
 
-      <div className="pp-stat-strip">
-        <div>
-          <span>形象总数</span>
-          <strong>{pets.length}</strong>
-        </div>
-        <div>
-          <span>内置</span>
-          <strong>{officialCount}</strong>
-        </div>
-        <div>
-          <span>我导入的</span>
-          <strong>{importedCount}</strong>
-        </div>
-        <div>
-          <span>桌面大小</span>
-          <strong>{Math.round(displayScale * 100)}%</strong>
-        </div>
-      </div>
-
       <section className="pp-section">
         <SectionHead
           title="形象库"
-          hint="官方内置、一张图导入、皮肤包和 PetDex 形象都收在这里。"
-          action={<span className="pp-count">{filtered.length} 个</span>}
+          hint={`官方内置、一张图导入、皮肤包和 PetDex 形象都收在这里。共 ${pets.length} 个，其中 ${importedCount} 个已导入。`}
+          action={<span className="pp-count">{filtered.length} / {pets.length}</span>}
         />
 
         <div className="pp-library-toolbar">

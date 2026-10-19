@@ -197,6 +197,11 @@ export default function PetView(): JSX.Element {
     }
   }, [setTransientState, clearBubble])
 
+  // 气泡/状态角标跟随设置里的主题
+  useEffect(() => {
+    document.body.dataset.theme = snapshot?.settings.theme ?? 'light'
+  }, [snapshot?.settings.theme])
+
   // 久未互动时偶尔犯困
   useEffect(() => {
     const timer = window.setInterval(() => {

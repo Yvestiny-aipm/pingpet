@@ -659,6 +659,10 @@ function applySettings(partial: Partial<Settings>): Snapshot {
       JSON.stringify(before[meta.envsKey]) !== JSON.stringify(next[meta.envsKey])
   )
   if (monitoringChanged) syncAgentMonitor()
+  // 主题切换：设置窗的窗口底色也一起换，避免 resize 时露出另一套底
+  if (before.theme !== next.theme && settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.setBackgroundColor(next.theme === 'dark' ? '#0a0a0c' : '#f5f5f7')
+  }
   // 用户在设置里开/关更新检查：立刻生效，关掉就不该再有任何网络请求
   if (before.updateCheckEnabled !== next.updateCheckEnabled) {
     if (next.updateCheckEnabled) {
@@ -694,7 +698,7 @@ function openSettings(): void {
     revealSettingsWindow(settingsWindow)
     return
   }
-  settingsWindow = createSettingsWindow()
+  settingsWindow = createSettingsWindow(getSettings().theme)
   settingsWindow.on('closed', () => {
     settingsWindow = null
   })

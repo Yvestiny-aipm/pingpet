@@ -41,6 +41,8 @@ export const DEFAULT_SETTINGS: Settings = {
   aiOpenaiBaseUrl: 'https://api.openai.com/v1',
   aiOpenaiApiKey: '',
   aiOpenaiModel: '',
+  // v0.7：默认浅色。深色是用户显式选择，不跟随系统，避免桌面宠物黑白跳变。
+  theme: 'light',
   // v0.6.2：默认开。它和「默认不联网」的原则不冲突——只取一个版本号，不上传任何用户数据；
   // 关掉更新检查的代价是用户永远停在装机那版，收不到修复。
   updateCheckEnabled: true

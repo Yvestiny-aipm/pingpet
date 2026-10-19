@@ -172,6 +172,9 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
   if (typeof partial.aiOpenaiModel === 'string') {
     next.aiOpenaiModel = sanitizeModelId(partial.aiOpenaiModel)
   }
+  if (partial.theme === 'light' || partial.theme === 'dark') {
+    next.theme = partial.theme
+  }
   if (typeof partial.updateCheckEnabled === 'boolean') {
     next.updateCheckEnabled = partial.updateCheckEnabled
   }

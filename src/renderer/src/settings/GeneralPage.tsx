@@ -29,7 +29,6 @@ export default function GeneralPage(props: GeneralPageProps): JSX.Element {
   return (
     <div className="pp-page">
       <PageHead
-        eyebrow="PREFERENCES"
         title="通用设置"
         subtitle="把桌面调成你舒服的样子。所有设置都只保存在本机。"
         actions={<Badge tone="neutral">v{appVersion}</Badge>}

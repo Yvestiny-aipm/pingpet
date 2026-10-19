@@ -18,6 +18,36 @@ body {
   overflow: hidden;
 }
 
+/* 气泡与状态角标跟随设置里的浅色/深色主题 */
+:root,
+body[data-theme='light'] {
+  --pet-bubble-bg: rgba(255, 255, 255, 0.97);
+  --pet-bubble-border: rgba(11, 11, 13, 0.1);
+  --pet-bubble-text: #1b1b1f;
+  --pet-bubble-shadow:
+    0 10px 28px rgba(11, 11, 13, 0.14),
+    0 2px 6px rgba(11, 11, 13, 0.06);
+  --pet-emote-bg: rgba(255, 255, 255, 0.97);
+  --pet-emote-border: rgba(11, 11, 13, 0.12);
+  --pet-emote-shadow:
+    0 6px 16px rgba(11, 11, 13, 0.14),
+    0 1px 3px rgba(11, 11, 13, 0.08);
+}
+
+body[data-theme='dark'] {
+  --pet-bubble-bg: rgba(20, 20, 24, 0.97);
+  --pet-bubble-border: rgba(255, 255, 255, 0.12);
+  --pet-bubble-text: #f4f4f6;
+  --pet-bubble-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+  --pet-emote-bg: rgba(24, 24, 29, 0.97);
+  --pet-emote-border: rgba(255, 255, 255, 0.14);
+  --pet-emote-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.42),
+    0 1px 3px rgba(0, 0, 0, 0.24);
+}
+
 /* ============ 宠物窗口 ============ */
 
 body[data-route='pet'] {
@@ -55,13 +85,10 @@ body[data-route='pet'] {
   max-width: 248px;
   padding: 10px 14px 11px;
   border-radius: 15px;
-  background: rgba(255, 253, 248, 0.97);
-  border: 1px solid rgba(63, 52, 40, 0.1);
-  box-shadow:
-    0 12px 30px rgba(63, 47, 30, 0.16),
-    0 2px 7px rgba(63, 47, 30, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  color: #3d372e;
+  background: var(--pet-bubble-bg);
+  border: 1px solid var(--pet-bubble-border);
+  box-shadow: var(--pet-bubble-shadow);
+  color: var(--pet-bubble-text);
   font-size: 12.5px;
   line-height: 1.55;
   letter-spacing: 0.002em;
@@ -230,11 +257,9 @@ body[data-route='pet'] {
   height: 24px;
   padding: 0 7px;
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.97);
-  border: 1px solid rgba(63, 52, 40, 0.12);
-  box-shadow:
-    0 6px 16px rgba(63, 47, 30, 0.16),
-    0 1px 3px rgba(63, 47, 30, 0.1);
+  background: var(--pet-emote-bg);
+  border: 1px solid var(--pet-emote-border);
+  box-shadow: var(--pet-emote-shadow);
   pointer-events: none;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif;
   font-size: 12px;
@@ -301,4 +326,28 @@ body[data-route='pet'] {
     transform: scale(1);
     opacity: 1;
   }
+}
+
+
+/* 深色主题下状态角标使用低饱和的紫/绿/琥珀语义色，和设置台强调色一致 */
+body[data-theme='dark'] .pet-emote--zzz {
+  color: #a5b4d0;
+}
+
+body[data-theme='dark'] .pet-emote--alert {
+  color: #f0a878;
+  background: #2a1d14;
+  border-color: rgba(240, 168, 120, 0.28);
+}
+
+body[data-theme='dark'] .pet-emote--think {
+  color: #c4b5fd;
+  background: #1e1a2c;
+  border-color: rgba(196, 181, 253, 0.28);
+}
+
+body[data-theme='dark'] .pet-emote--fail {
+  color: #ff9b91;
+  background: #2a1716;
+  border-color: rgba(255, 155, 145, 0.28);
 }

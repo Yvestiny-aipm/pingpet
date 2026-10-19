@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, screen } from 'electron'
 import { PET_BODY_SIZE, PET_CENTER, PET_WINDOW, SCREEN_EDGE_MARGIN } from '@shared/defaults'
-import type { PetPosition } from '@shared/types'
+import type { PetPosition, ThemeMode } from '@shared/types'
 
 const rendererDevUrl = process.env['ELECTRON_RENDERER_URL']
 
@@ -116,7 +116,7 @@ export function createPetWindow(position: PetPosition): BrowserWindow {
   return win
 }
 
-export function createSettingsWindow(): BrowserWindow {
+export function createSettingsWindow(theme: ThemeMode = 'light'): BrowserWindow {
   const { workArea } = screen.getPrimaryDisplay()
   // 1180×820 是 13/14 寸 Mac 上不挤也不空的折中；最小 900×640 保证两栏布局不塌。
   const width = Math.min(1180, Math.max(940, workArea.width - 140))
@@ -130,8 +130,8 @@ export function createSettingsWindow(): BrowserWindow {
     resizable: true,
     maximizable: true,
     fullscreenable: false,
-    // 和设置台暖纸底色一致，避免窗口出现/缩放时闪一下灰底
-    backgroundColor: '#f2f0e9',
+    // 和设置台当前主题一致，避免窗口出现/缩放时闪一下另一套底色
+    backgroundColor: theme === 'dark' ? '#0a0a0c' : '#f5f5f7',
     title: 'PingPet 设置',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
     trafficLightPosition: process.platform === 'darwin' ? { x: 18, y: 17 } : undefined,

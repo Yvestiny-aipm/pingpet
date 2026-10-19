@@ -89,6 +89,20 @@ async function run(win) {
   await wait(500)
   if (!(await js(`Boolean(document.querySelector('.pp-test-result.is-ok'))`))) problems.push('测试连接结果没有显示')
 
+  // 主题切换：深色紫色强调 / 浅色天蓝强调
+  await js(`[...document.querySelectorAll('.pp-theme-toggle button')].find((b) => b.textContent.includes('深色'))?.click()`)
+  await wait(400)
+  if (!(await js(`document.body.dataset.theme === 'dark'`))) problems.push('深色主题没有应用')
+  if (!(await js(`getComputedStyle(document.body).getPropertyValue('--pp-accent').trim() === '#8b5cf6'`))) {
+    problems.push('深色主题强调色不是紫色')
+  }
+  await js(`[...document.querySelectorAll('.pp-theme-toggle button')].find((b) => b.textContent.includes('浅色'))?.click()`)
+  await wait(400)
+  if (!(await js(`document.body.dataset.theme === 'light'`))) problems.push('浅色主题没有恢复')
+  if (!(await js(`getComputedStyle(document.body).getPropertyValue('--pp-accent').trim() === '#0a84ff'`))) {
+    problems.push('浅色主题强调色不是天蓝色')
+  }
+
   await js(`document.querySelector('.pp-scroll').scrollTop = 600`)
   await clickNav('通用设置')
   if (!(await js(`document.body.innerText.includes('隐私边界')`))) problems.push('通用设置内容缺失')

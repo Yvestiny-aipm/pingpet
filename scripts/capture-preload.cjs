@@ -13,6 +13,7 @@ const demoSheet = pathToFileURL(join(__dirname, 'fixtures', 'demo-spritesheet.pn
 const now = Date.now()
 
 const settings = {
+  theme: 'light',
   selectedPetId: 'dango',
   petScale: 1,
   bubblesEnabled: true,
@@ -126,7 +127,7 @@ const samplePets = [
 function petdexList() {
   return {
     ok: true,
-    total: 3400,
+    total: 5087,
     pets: samplePets.map(([slug, displayName, kind, author]) => ({
       slug,
       displayName,

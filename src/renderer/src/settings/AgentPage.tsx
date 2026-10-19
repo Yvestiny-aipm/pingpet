@@ -97,7 +97,6 @@ export default function AgentPage(props: AgentPageProps): JSX.Element {
   return (
     <div className="pp-page">
       <PageHead
-        eyebrow="AGENT WATCH"
         title="Agent 监控"
         subtitle="它们干活时安静等待，停下来时再叫你。只读本机会话文件，不上传代码。"
       />
