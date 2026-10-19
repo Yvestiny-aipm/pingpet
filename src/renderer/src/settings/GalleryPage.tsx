@@ -71,6 +71,9 @@ export default function GalleryPage({ pets, onInstalled, notify }: GalleryPagePr
   const alive = useRef(true)
 
   useEffect(() => {
+    // StrictMode 下 effect 会 mount → cleanup → 再 mount；必须重新置 true，
+    // 否则第一次 cleanup 之后所有异步结果都会被误判成“组件已卸载”而丢弃。
+    alive.current = true
     return () => {
       alive.current = false
     }
