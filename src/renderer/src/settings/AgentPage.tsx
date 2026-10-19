@@ -103,7 +103,6 @@ export default function AgentPage(props: AgentPageProps): JSX.Element {
 
       <div className="pp-agent-summary">
         <div className="pp-agent-summary__main">
-          <span className="pp-eyebrow">ENABLED SOURCES</span>
           <div className="pp-agent-summary__count">
             <strong>{openCount}</strong>
             <span>/ {AGENT_SOURCE_LIST.length} 家</span>

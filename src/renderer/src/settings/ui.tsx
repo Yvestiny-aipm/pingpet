@@ -131,12 +131,10 @@ export function SectionHead({
 }
 
 export function PageHead({
-  eyebrow,
   title,
   subtitle,
   actions
 }: {
-  eyebrow?: string
   title: string
   subtitle?: ReactNode
   actions?: ReactNode
@@ -144,7 +142,6 @@ export function PageHead({
   return (
     <header className="pp-page-head">
       <div className="pp-page-head__copy">
-        {eyebrow && <div className="pp-eyebrow">{eyebrow}</div>}
         <h1>{title}</h1>
         {subtitle && <p>{subtitle}</p>}
       </div>

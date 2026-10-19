@@ -457,14 +457,6 @@ body[data-theme='dark'] .pp-theme-toggle button.is-active {
   min-width: 0;
 }
 
-.pp-eyebrow {
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  color: var(--pp-faint);
-  text-transform: uppercase;
-}
-
 .pp-page-head h1 {
   margin: 0;
   font-size: 26px;
@@ -1466,7 +1458,6 @@ body[data-theme='dark'] .pp-hero__pet {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  margin-top: 7px;
 }
 
 .pp-agent-summary__count strong {
