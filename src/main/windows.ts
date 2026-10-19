@@ -118,6 +118,7 @@ export function createPetWindow(position: PetPosition): BrowserWindow {
 
 export function createSettingsWindow(): BrowserWindow {
   const { workArea } = screen.getPrimaryDisplay()
+  // 1180×820 是 13/14 寸 Mac 上不挤也不空的折中；最小 900×640 保证两栏布局不塌。
   const width = Math.min(1180, Math.max(940, workArea.width - 140))
   const height = Math.min(820, Math.max(660, workArea.height - 96))
   const win = new BrowserWindow({
