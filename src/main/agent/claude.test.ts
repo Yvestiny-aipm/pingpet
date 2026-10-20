@@ -66,9 +66,102 @@ describe('事件映射', () => {
     expect(scanClaude(NOW)[0].kind).toBe('needs_attention')
   })
 
-  it('end_turn 且文本是明确报错 → failed', () => {
+  it('end_turn 且文本提到报错 → 仍按这一轮结束，不靠关键词升级失败', () => {
     session('proj', 'f', [assistant('end_turn', '构建失败，报错如下：xxx')])
-    expect(scanClaude(NOW)[0].kind).toBe('failed')
+    const e = scanClaude(NOW)[0]
+    expect(e.kind).toBe('done')
+    expect(e.reason).toBe('completed')
+  })
+
+  it('stop_reason=stop_sequence → done', () => {
+    session('proj', 'f', [assistant('stop_sequence', '触发了停止序列')])
+    expect(scanClaude(NOW)[0]).toMatchObject({ kind: 'done', reason: 'completed' })
+  })
+
+  it('stop_reason=max_tokens → failed/error，detail 说明截断', () => {
+    session('proj', 'f', [assistant('max_tokens', '写到一半')])
+    const e = scanClaude(NOW)[0]
+    expect(e.kind).toBe('failed')
+    expect(e.reason).toBe('error')
+    expect(e.detail).toContain('max_tokens')
+  })
+
+  it('assistant isApiErrorMessage → failed/error，优先于 stop_reason', () => {
+    session('proj', 'f', [
+      assistant('end_turn', '请求失败', {
+        isApiErrorMessage: true,
+        error: 'auth failed'
+      })
+    ])
+    const e = scanClaude(NOW)[0]
+    expect(e.kind).toBe('failed')
+    expect(e.reason).toBe('error')
+    expect(e.detail).toBe('auth failed')
+  })
+
+  it('sidechain 子 Agent 的 end_turn 不产出主任务事件', () => {
+    session('proj', 'f', [
+      assistant('end_turn', '子任务完成', { isSidechain: true }),
+      assistant('tool_use', '主任务还在跑')
+    ])
+    const events = scanClaude(NOW)
+    expect(events).toHaveLength(1)
+    expect(events[0].kind).toBe('working')
+  })
+
+  it('sidechain 子 Agent 的 user / tool_use 也不产出事件', () => {
+    session('proj', 'f', [
+      {
+        timestamp: iso(),
+        type: 'user',
+        sessionId: 'sess-1',
+        isSidechain: true,
+        message: { content: '子任务输入' }
+      },
+      assistant('tool_use', '', { isSidechain: true })
+    ])
+    expect(scanClaude(NOW)).toEqual([])
+  })
+
+  it('system api_error 自动重试中 → working，不提前报错', () => {
+    session('proj', 'f', [
+      {
+        timestamp: iso(),
+        type: 'system',
+        subtype: 'api_error',
+        level: 'error',
+        sessionId: 'sess-1',
+        retryAttempt: 1,
+        maxRetries: 10,
+        retryInMs: 584,
+        error: 'overloaded'
+      }
+    ])
+    expect(scanClaude(NOW)[0]).toMatchObject({ kind: 'working' })
+  })
+
+  it('system api_error 重试耗尽 → failed/error', () => {
+    session('proj', 'f', [
+      {
+        timestamp: iso(),
+        type: 'system',
+        subtype: 'api_error',
+        level: 'error',
+        sessionId: 'sess-1',
+        retryAttempt: 10,
+        maxRetries: 10,
+        error: 'overloaded'
+      }
+    ])
+    const e = scanClaude(NOW)[0]
+    expect(e.kind).toBe('failed')
+    expect(e.reason).toBe('error')
+    expect(e.detail).toBe('overloaded')
+  })
+
+  it('assistant 的 uuid 用作稳定事件 id', () => {
+    session('proj', 'f', [assistant('tool_use', '', { uuid: 'uuid-123' })])
+    expect(scanClaude(NOW)[0].id).toBe('claude:uuid-123')
   })
 
   it('user 行 → working（用户刚发指令，回合在推进）', () => {

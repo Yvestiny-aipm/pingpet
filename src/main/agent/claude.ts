@@ -65,6 +65,21 @@ function sessionKeyFor(filePath: string, line: Record<string, unknown>): string 
   return `claude:${basename(dirname(filePath))}/${basename(filePath)}`
 }
 
+/** 把任意 error 字段压成一句可读 detail，最多 120 字符 */
+function errorDetail(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined
+  const text = raw.replace(/\s+/g, ' ').trim()
+  return text ? text.slice(0, 120) : undefined
+}
+
+/** API 错误正在自动重试时不是终态；重试耗尽后才提醒。 */
+function isRetryScheduled(line: Record<string, unknown>): boolean {
+  const attempt = typeof line.retryAttempt === 'number' ? line.retryAttempt : undefined
+  const max = typeof line.maxRetries === 'number' ? line.maxRetries : undefined
+  if (attempt !== undefined && max !== undefined && attempt < max) return true
+  return typeof line.retryInMs === 'number' && line.retryInMs > 0
+}
+
 function parseClaudeFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
   const lines = readJsonlTail(filePath, AGENT_TAIL_BYTES)
   const events: AgentMonitorEvent[] = []
@@ -72,6 +87,7 @@ function parseClaudeFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
   // 会话级环境：entrypoint 逐行都带，取 tail 里能读到的最后一个；读不到兜底 terminal
   let env: AgentEnv = 'terminal'
   for (const line of lines) {
+    if (line.isSidechain === true) continue
     const ep = entrypointToEnv(line.entrypoint)
     if (ep) env = ep
   }
@@ -80,6 +96,9 @@ function parseClaudeFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
   const oldestMs = nowMs - AGENT_EVENT_FRESH_MS
 
   for (const line of lines) {
+    // 子 Agent 的回合结束不代表用户主任务结束；与 Cursor 的 subagents/ 同理。
+    if (line.isSidechain === true) continue
+
     const type = line.type
     const message =
       line.message && typeof line.message === 'object'
@@ -88,6 +107,7 @@ function parseClaudeFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
     const tsMs = getTimestampMs(line) || nowMs
     if (tsMs < oldestMs) continue
     const sessionKey = sessionKeyFor(filePath, line)
+    const body = extractAssistantText(message)
 
     let kind: AgentEventKind | null = null
     let text = ''
@@ -95,25 +115,46 @@ function parseClaudeFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
     let detail: string | undefined
 
     if (type === 'assistant') {
-      const stopReason = message.stop_reason
-      if (stopReason === 'tool_use') {
-        // 仍在调工具 = 正在干活。发 working 事件让宠物切 thinking，但不会弹气泡。
-        kind = 'working'
-        text = 'Claude Code 正在处理任务'
-      } else if (stopReason === 'end_turn') {
-        // 回合结束 = Agent 停下来了。判断为什么停：完成 / 需要你 / 出错。
-        const body = extractAssistantText(message)
-        const classified = classifyStopText(body)
-        if (classified) {
-          kind = classified.kind
-          reason = classified.reason
-          detail = classified.detail
-        } else {
-          // end_turn 认不出具体类别时，视为正常「回合结束」= 完成（最常见情况）
-          kind = 'done'
-          reason = 'completed'
-        }
+      // API 错误是结构化终态，优先级高于 stop_reason。
+      if (line.isApiErrorMessage === true || typeof line.error === 'string') {
+        kind = 'failed'
+        reason = 'error'
+        detail = errorDetail(line.error) ?? (body ? body.slice(0, 120) : 'Claude API 返回错误')
         text = body.slice(0, 200)
+      } else {
+        const stopReason = message.stop_reason
+        if (stopReason === 'tool_use') {
+          // 仍在调工具 = 正在干活。发 working 事件让宠物切 thinking，但不会弹气泡。
+          kind = 'working'
+          text = 'Claude Code 正在处理任务'
+        } else if (stopReason === 'end_turn' || stopReason === 'stop_sequence') {
+          // 回合结束。文本只用于判断“是否在等用户”，不把关键词升级成成功/失败。
+          const classified = classifyStopText(body)
+          if (classified?.kind === 'needs_attention') {
+            kind = 'needs_attention'
+            reason = 'needs_input'
+            detail = classified.detail
+          } else {
+            kind = 'done'
+            reason = 'completed'
+          }
+          text = body.slice(0, 200)
+        } else if (stopReason === 'max_tokens') {
+          kind = 'failed'
+          reason = 'error'
+          detail = '输出被截断（max_tokens）'
+          text = body.slice(0, 200)
+        }
+      }
+    } else if (type === 'system' && (line.subtype === 'api_error' || line.level === 'error')) {
+      // 自动重试中的 api_error 不是终态；重试耗尽后才提醒。
+      if (isRetryScheduled(line)) {
+        kind = 'working'
+        text = 'Claude Code 正在重试 API 请求'
+      } else {
+        kind = 'failed'
+        reason = 'error'
+        detail = errorDetail(line.error) ?? 'Claude API 请求失败'
       }
     } else if (type === 'last-prompt' || type === 'user') {
       // 用户刚发出指令 / 回合推进：视为 working（不弹气泡，只让宠物切 thinking）
@@ -123,7 +164,8 @@ function parseClaudeFile(filePath: string, nowMs: number): AgentMonitorEvent[] {
 
     if (kind) {
       events.push({
-        id: '',
+        // Claude 每条 assistant/system 都有 uuid；用它做跨轮稳定去重，缺失时交给 Monitor 生成。
+        id: typeof line.uuid === 'string' && line.uuid ? `claude:${line.uuid}` : '',
         source: 'claude',
         env,
         sessionKey,

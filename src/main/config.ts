@@ -76,6 +76,10 @@ export function buildAgentBubbleHead(event: AgentMonitorEvent): string {
   if (event.source === 'cursor' && event.kind === 'done') {
     return `${SOURCE_NAME(event.source)} 这一轮结束了，回去看看`
   }
+  // Claude 的 end_turn 同样只是这一轮结束；文本只用于“需要你”，不算任务成功。
+  if (event.source === 'claude' && event.kind === 'done') {
+    return `${SOURCE_NAME(event.source)} 这一轮结束了，回去看看`
+  }
   return `${SOURCE_NAME(event.source)} ${STOP_REASON_PHRASE[effectiveReason(event)]}`
 }
 

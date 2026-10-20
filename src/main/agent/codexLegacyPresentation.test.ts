@@ -81,15 +81,25 @@ describe('Codex 旧路径完成提醒隔离', () => {
     expect(buildAgentBubbleHead(done)).not.toContain('任务完成')
   })
 
-  it('Claude / Grok 的 done 行为完全不变', () => {
-    for (const source of ['claude', 'grok'] as const) {
-      const done = ev(source, 'done', { reason: 'completed' })
-      expect(isCodexLegacyProtocolComplete(done)).toBe(false)
-      expect(shouldPresentAgentTerminalToUser(done)).toBe(true)
-      expect(shouldPlayAgentCompletionSound([done])).toBe(true)
-      expect(petStateForPresentedKind('done')).toBe('happy')
-      expect(looksLikeTaskSuccessCopy(buildAgentBubbleHead(done))).toBe(true)
-    }
+  it('Grok 的 done 行为完全不变', () => {
+    const done = ev('grok', 'done', { reason: 'completed' })
+    expect(isCodexLegacyProtocolComplete(done)).toBe(false)
+    expect(shouldPresentAgentTerminalToUser(done)).toBe(true)
+    expect(shouldPlayAgentCompletionSound([done])).toBe(true)
+    expect(petStateForPresentedKind('done')).toBe('happy')
+    expect(looksLikeTaskSuccessCopy(buildAgentBubbleHead(done))).toBe(true)
+  })
+
+  it('Claude 的 done 用中性文案，但保留提醒音与 happy 姿态', () => {
+    const done = ev('claude', 'done', { reason: 'completed' })
+    expect(isCodexLegacyProtocolComplete(done)).toBe(false)
+    expect(shouldPresentAgentTerminalToUser(done)).toBe(true)
+    expect(shouldPlayAgentCompletionSound([done])).toBe(true)
+    expect(petStateForTerminalEvent(done)).toBe('happy')
+    expect(looksLikeTaskSuccessCopy(buildAgentBubbleHead(done))).toBe(false)
+    expect(buildAgentBubbleHead(done)).toContain('这一轮结束了')
+    expect(buildAgentBubbleHead(done)).not.toContain('任务完成')
+    expect(buildAgentBubbleText(done)).not.toContain('任务完成')
   })
 
   it('Cursor 的 done 用中性文案，但保留提醒音与 happy 姿态', () => {
