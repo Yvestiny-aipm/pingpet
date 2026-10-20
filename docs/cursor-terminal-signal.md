@@ -90,15 +90,33 @@
   - `turn_ended/error` 的用户中止分支
 - `src/main/config.ts`
   - `buildAgentBubbleHead()` 的 Cursor 中性结束文案
+- `src/main/agent/cursorProcess.ts`
+  - macOS `pgrep -x Cursor` 主进程探针（2 秒刷新）
+- `src/main/agent/monitor.ts`
+  - `working` 中主进程退出 → 2 秒宽限后补 `failed/interrupted`
+  - 收到 `turn_ended`、退出后重启、环境过滤不通过都不补
 - 测试
   - `src/main/agent/cursor.test.ts`
+  - `src/main/agent/monitor.test.ts`
   - `src/main/agent/codexLegacyPresentation.test.ts`
 
 ---
 
-## 5. 仍未覆盖
+## 5. 进程退出兜底
 
-- Cursor 被强制退出 / 崩溃时可能来不及写 `turn_ended`；当前不会提示中断。
+Cursor 被强制退出 / 崩溃时可能来不及写 `turn_ended`。当前增加一条保守兜底：
+
+- 只对 `env=desktop` 的 Cursor 会话生效；
+- 该会话最近一次状态必须仍是 `working`；
+- Cursor 主进程从「运行中」变为「未运行」；
+- 消失后等待 2 秒，给 `turn_ended` 最后写入留时间；
+- 期间收到终态、进程重启、会话超过活跃窗口、环境过滤不通过，都不补提醒；
+- 补出的气泡是 `Cursor 输出被中断了 ⛔` + `Cursor 进程已退出，未检测到 turn_ended`。
+
+## 6. 仍未覆盖
+
+- Cursor CLI 会话没有桌面主进程，套用进程兜底会误报；当前只对 `desktop` 生效。
 - Cursor 云端任务没有本地 transcript；当前只覆盖本地桌面 / CLI。
 - 没有稳定的 `turn_ended` 行内时间戳；事件时间仍使用文件 mtime。
 - 末行策略保证不重复提醒，但无法区分「用户中止」与「Cursor 自己取消」的底层动作；只能按 error 文案区分。
+- 主进程探针只在 macOS 启用；Windows / Linux 返回 `undefined`，不启用兜底。

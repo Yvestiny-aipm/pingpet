@@ -65,6 +65,11 @@ export interface MonitorDeps {
    * 被 freshness/env/dedup/prime 忽略时也可记录。失败不得影响 onEvent。
    */
   onLegacyDiagnostic?(draft: CodexLegacyDiagnosticDraft): void
+  /**
+   * Cursor 主进程是否在运行。undefined = 当前平台不启用进程兜底。
+   * 只用于「最后状态仍是 working，但进程已退出且没写 turn_ended」的强制退出/崩溃场景。
+   */
+  isCursorRunning?(): boolean | undefined
 }
 
 /** 简易稳定字符串哈希（djb2），用于事件去重 id，不追求密码学强度 */
@@ -86,6 +91,9 @@ const TERMINAL_KINDS: ReadonlySet<AgentEventKind> = new Set<AgentEventKind>([
   'failed'
 ])
 
+/** 进程消失后等待一小段，避免 Cursor 重启 / 终端写入 turn_ended 的竞态造成误报。 */
+const CURSOR_PROCESS_EXIT_GRACE_MS = 2_000
+
 export class AgentMonitor {
   private config: MonitorConfig
   private readonly deps: MonitorDeps
@@ -99,6 +107,13 @@ export class AgentMonitor {
   private readonly workingSeenAt = new Map<string, number>()
   /** 活跃会话：sessionKey -> {source, lastSeenAt} */
   private readonly activeSessions = new Map<string, { source: AgentSource; lastSeenAt: number }>()
+  /** 每个会话最近一次事件 kind：进程兜底只对仍处于 working 的 Cursor 会话生效。 */
+  private readonly lastKindBySession = new Map<string, AgentEventKind>()
+  /** 仍处于 working 的会话最近一条事件，进程退出时用它补环境 / 路径 / 会话信息。 */
+  private readonly lastWorkingEventBySession = new Map<string, AgentMonitorEvent>()
+  /** null = 还没建立基线；false = 上次看到未运行；true = 上次看到运行中。 */
+  private cursorWasRunning: boolean | null = null
+  private cursorExitPendingAt: number | null = null
 
   private lastCheckedAt: number | null = null
   private lastEvent: AgentMonitorEvent | null = null
@@ -131,6 +146,10 @@ export class AgentMonitor {
     // 首轮 prime：把已有旧事件标记为 seen，避免启动后弹一堆历史提醒
     this.primed = false
     this.codexShadow.clear()
+    this.lastKindBySession.clear()
+    this.lastWorkingEventBySession.clear()
+    this.cursorWasRunning = null
+    this.cursorExitPendingAt = null
     this.tick()
     this.timer = setInterval(() => this.tick(), AGENT_POLL_INTERVAL_MS)
   }
@@ -203,6 +222,12 @@ export class AgentMonitor {
       source: event.source,
       lastSeenAt: event.timestampMs
     })
+    this.lastKindBySession.set(event.sessionKey, event.kind)
+    if (event.kind === 'working') {
+      this.lastWorkingEventBySession.set(event.sessionKey, event)
+    } else {
+      this.lastWorkingEventBySession.delete(event.sessionKey)
+    }
 
     this.markSeen(event.id)
 
@@ -342,5 +367,112 @@ export class AgentMonitor {
       // 首轮结束后解除 prime，之后的新事件才真正提醒
       this.primed = true
     }
+
+    try {
+      this.checkCursorProcessExit(now)
+    } catch (err) {
+      this.deps.log?.(
+        `cursor process probe: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
+  }
+
+  /**
+   * Cursor 强制退出 / 崩溃兜底。
+   *
+   * 只有同时满足以下条件才补一条 interrupted：
+   * - 上一次观察时 Cursor 主进程在运行，这一次不在了；
+   * - 某个 Cursor desktop 会话最近状态仍是 working（没收到 turn_ended）；
+   * - 该会话仍在 AGENT_SESSION_EXPIRE_MS 内，且通过当前环境过滤。
+   *
+   * 进程消失后等 CURSOR_PROCESS_EXIT_GRACE_MS，给文件系统最后一个 turn_ended 写入留时间；
+   * 如果这期间收到终态，candidate 消失，不会误报「中断」。
+   */
+  private checkCursorProcessExit(now: number): void {
+    if (!this.isActive('cursor')) return
+    const probe = this.deps.isCursorRunning
+    if (!probe) return
+    const running = probe()
+    if (running === undefined) return
+
+    if (running) {
+      this.cursorWasRunning = true
+      this.cursorExitPendingAt = null
+      return
+    }
+
+    if (this.cursorWasRunning === null) {
+      this.cursorWasRunning = false
+      return
+    }
+
+    // 刚刚从 running -> not running：先记下待确认时间，不立即弹。
+    if (this.cursorWasRunning) {
+      this.cursorWasRunning = false
+      const candidate = this.pickCursorExitCandidate(now)
+      if (!candidate) {
+        this.cursorExitPendingAt = null
+        return
+      }
+      this.cursorExitPendingAt = now
+      return
+    }
+
+    if (this.cursorExitPendingAt === null) return
+
+    const candidate = this.pickCursorExitCandidate(now)
+    if (!candidate) {
+      // 等待期间 turn_ended 到了，或会话已经不再 working / 超过活跃窗口。
+      this.cursorExitPendingAt = null
+      return
+    }
+    if (now - this.cursorExitPendingAt < CURSOR_PROCESS_EXIT_GRACE_MS) return
+
+    this.cursorExitPendingAt = null
+    this.ingest(
+      {
+        id: `cursor:process-exit:${candidate.sessionKey}:${candidate.lastSeenAt}`,
+        source: 'cursor',
+        env: candidate.event.env,
+        sessionKey: candidate.sessionKey,
+        kind: 'failed',
+        message: 'Cursor 已退出，任务可能中断',
+        timestampMs: now,
+        rawPath: candidate.event.rawPath,
+        reason: 'interrupted',
+        detail:
+          candidate.count > 1
+            ? `Cursor 进程已退出，未检测到 turn_ended；还有 ${candidate.count - 1} 个 Cursor 会话可能中断`
+            : 'Cursor 进程已退出，未检测到 turn_ended'
+      },
+      true
+    )
+  }
+
+  private pickCursorExitCandidate(now: number): {
+    sessionKey: string
+    lastSeenAt: number
+    event: AgentMonitorEvent
+    count: number
+  } | null {
+    const candidates: Array<{
+      sessionKey: string
+      lastSeenAt: number
+      event: AgentMonitorEvent
+    }> = []
+
+    for (const [sessionKey, info] of this.activeSessions) {
+      if (info.source !== 'cursor') continue
+      if (now - info.lastSeenAt > AGENT_SESSION_EXPIRE_MS) continue
+      if (this.lastKindBySession.get(sessionKey) !== 'working') continue
+      const workingEvent = this.lastWorkingEventBySession.get(sessionKey)
+      if (!workingEvent || workingEvent.env !== 'desktop') continue
+      if (!this.passesEnvFilter(workingEvent)) continue
+      candidates.push({ sessionKey, lastSeenAt: info.lastSeenAt, event: workingEvent })
+    }
+
+    if (candidates.length === 0) return null
+    candidates.sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+    return { ...candidates[0], count: candidates.length }
   }
 }

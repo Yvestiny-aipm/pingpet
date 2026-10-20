@@ -87,6 +87,7 @@ import {
   codexLegacyDiagnosticPath,
   codexShadowDiagnosticPath
 } from './agent/codexShadowLog'
+import { createCursorProcessProbe } from './agent/cursorProcess'
 import { summarizeAgentStop, testAiSummary } from './ai/summarize'
 import { getSettings, migrateSecretsAtRest, patchSettings } from './store'
 import { checkForUpdate } from './update'
@@ -329,6 +330,7 @@ function scheduleIdleBubble(): void {
 
 let agentMonitor: AgentMonitor | null = null
 const codexSilentVisualGate = new CodexSilentVisualGate()
+const cursorProcessProbe = createCursorProcessProbe()
 const codexPartialFailureBubbleGate = new CodexPartialFailureBubbleGate()
 const codexPartialFailureSoundGate = new CodexPartialFailureSoundGate()
 
@@ -435,6 +437,7 @@ function syncAgentMonitor(): void {
     agentMonitor = new AgentMonitor(config, {
       now: () => Date.now(),
       onEvent: handleAgentEvent,
+      isCursorRunning: cursorProcessProbe,
       // 方案 A：只写 source=codex 的旧事件到 codex-legacy.jsonl，避免其他 Agent 被当成 Codex 样本。
       // 旧事件脱敏副本只写本地诊断，在 onEvent 之前记录；失败不影响 handleAgentEvent。
       onLegacyDiagnostic: (draft) => {

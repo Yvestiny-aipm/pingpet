@@ -156,3 +156,169 @@ describe('运行状态', () => {
     ])
   })
 })
+
+
+describe('Cursor 进程退出兜底', () => {
+  const CURSOR_CONFIG: MonitorConfig = {
+    ...CONFIG,
+    cursor: { enabled: true, envs: ['desktop'] }
+  }
+
+  function cursorEvent(kind: AgentEventKind, sessionKey = 'cursor-s1', env: AgentMonitorEvent['env'] = 'desktop'): AgentMonitorEvent {
+    return {
+      id: '',
+      source: 'cursor',
+      env,
+      sessionKey,
+      kind,
+      message: `cursor ${kind}`,
+      timestampMs: clock,
+      rawPath: `/tmp/${sessionKey}.jsonl`
+    }
+  }
+
+  function cursorMonitor(isRunning: () => boolean | undefined): AgentMonitor {
+    return new AgentMonitor(CURSOR_CONFIG, {
+      now: () => clock,
+      onEvent: (e) => dispatched.push(e),
+      isCursorRunning: isRunning
+    })
+  }
+
+  function prime(m: AgentMonitor): void {
+    m.start()
+    m.stop()
+    dispatched = []
+  }
+
+  it('working 中 Cursor 主进程退出 → 补一条 interrupted', () => {
+    let running = true
+    monitor = cursorMonitor(() => running)
+    prime(monitor)
+    monitor.ingest(cursorEvent('working'), true)
+    running = false
+    clock += 1_000
+    monitor.scanNow()
+    clock += 2_000
+    monitor.scanNow()
+
+    const synthetic = dispatched.find((e) => e.id.startsWith('cursor:process-exit:'))
+    expect(synthetic).toMatchObject({
+      source: 'cursor',
+      kind: 'failed',
+      reason: 'interrupted',
+      sessionKey: 'cursor-s1',
+      env: 'desktop'
+    })
+    expect(synthetic?.detail).toContain('未检测到 turn_ended')
+  })
+
+  it('多个 Cursor 会话同时中断时只补一条，并带上数量', () => {
+    let running = true
+    monitor = cursorMonitor(() => running)
+    prime(monitor)
+    monitor.ingest(cursorEvent('working', 'cursor-a'), true)
+    clock += 1_000
+    monitor.ingest(cursorEvent('working', 'cursor-b'), true)
+    running = false
+    clock += 1_000
+    monitor.scanNow()
+    clock += 2_000
+    monitor.scanNow()
+
+    const synthetic = dispatched.filter((e) => e.id.startsWith('cursor:process-exit:'))
+    expect(synthetic).toHaveLength(1)
+    expect(synthetic[0].detail).toContain('还有 1 个 Cursor 会话可能中断')
+  })
+
+  it('同一次退出只补一条，不重复提醒', () => {
+    let running = true
+    monitor = cursorMonitor(() => running)
+    prime(monitor)
+    monitor.ingest(cursorEvent('working'), true)
+    running = false
+    clock += 1_000
+    monitor.scanNow()
+    clock += 2_000
+    monitor.scanNow()
+    clock += 5_000
+    monitor.scanNow()
+    expect(dispatched.filter((e) => e.id.startsWith('cursor:process-exit:'))).toHaveLength(1)
+  })
+
+  it('已经收到 turn_ended 后再退出 → 不补中断', () => {
+    let running = true
+    monitor = cursorMonitor(() => running)
+    prime(monitor)
+    monitor.ingest(cursorEvent('working'), true)
+    clock += 1_000
+    monitor.ingest(cursorEvent('done'), true)
+    running = false
+    clock += 1_000
+    monitor.scanNow()
+    clock += 2_000
+    monitor.scanNow()
+    expect(dispatched.some((e) => e.id.startsWith('cursor:process-exit:'))).toBe(false)
+  })
+
+  it('Cursor 启动时就不在运行 → 不补中断', () => {
+    let running = false
+    monitor = cursorMonitor(() => running)
+    prime(monitor)
+    monitor.ingest(cursorEvent('working'), true)
+    clock += 1_000
+    monitor.scanNow()
+    clock += 2_000
+    monitor.scanNow()
+    expect(dispatched.some((e) => e.id.startsWith('cursor:process-exit:'))).toBe(false)
+  })
+
+  it('CLI 会话（env=terminal）不套用桌面进程退出兜底', () => {
+    let running = true
+    monitor = cursorMonitor(() => running)
+    prime(monitor)
+    monitor.ingest(cursorEvent('working', 'cursor-cli', 'terminal'), true)
+    running = false
+    clock += 1_000
+    monitor.scanNow()
+    clock += 2_000
+    monitor.scanNow()
+    expect(dispatched.some((e) => e.id.startsWith('cursor:process-exit:'))).toBe(false)
+  })
+
+  it('环境过滤不通过时不补中断', () => {
+    let running = true
+    monitor = new AgentMonitor(
+      { ...CONFIG, cursor: { enabled: true, envs: ['terminal'] } },
+      {
+        now: () => clock,
+        onEvent: (e) => dispatched.push(e),
+        isCursorRunning: () => running
+      }
+    )
+    prime(monitor)
+    monitor.ingest(cursorEvent('working'), true)
+    running = false
+    clock += 1_000
+    monitor.scanNow()
+    clock += 2_000
+    monitor.scanNow()
+    expect(dispatched.some((e) => e.id.startsWith('cursor:process-exit:'))).toBe(false)
+  })
+
+  it('退出后 2 秒内重启 → 取消待确认，不补中断', () => {
+    let running = true
+    monitor = cursorMonitor(() => running)
+    prime(monitor)
+    monitor.ingest(cursorEvent('working'), true)
+    running = false
+    clock += 1_000
+    monitor.scanNow()
+    running = true
+    clock += 500
+    monitor.scanNow()
+    clock += 5_000
+    monitor.scanNow()
+    expect(dispatched.some((e) => e.id.startsWith('cursor:process-exit:'))).toBe(false)
+  })
+})
