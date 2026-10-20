@@ -71,6 +71,11 @@ export function buildAgentBubbleHead(event: AgentMonitorEvent): string {
   if (event.source === 'codex' && event.kind === 'done') {
     return `${SOURCE_NAME(event.source)} 这一轮结束了，回去看看`
   }
+  // Cursor 的 turn_ended/success 同样是“这一轮硬结束”，不是已验证的任务成功。
+  // 保留完成音/桌宠姿态作为提醒，但文案不写“任务完成”。
+  if (event.source === 'cursor' && event.kind === 'done') {
+    return `${SOURCE_NAME(event.source)} 这一轮结束了，回去看看`
+  }
   return `${SOURCE_NAME(event.source)} ${STOP_REASON_PHRASE[effectiveReason(event)]}`
 }
 

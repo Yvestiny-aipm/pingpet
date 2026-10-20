@@ -81,8 +81,8 @@ describe('Codex 旧路径完成提醒隔离', () => {
     expect(buildAgentBubbleHead(done)).not.toContain('任务完成')
   })
 
-  it('其他 Agent 的 done 行为完全不变', () => {
-    for (const source of ['claude', 'cursor', 'grok'] as const) {
+  it('Claude / Grok 的 done 行为完全不变', () => {
+    for (const source of ['claude', 'grok'] as const) {
       const done = ev(source, 'done', { reason: 'completed' })
       expect(isCodexLegacyProtocolComplete(done)).toBe(false)
       expect(shouldPresentAgentTerminalToUser(done)).toBe(true)
@@ -90,6 +90,27 @@ describe('Codex 旧路径完成提醒隔离', () => {
       expect(petStateForPresentedKind('done')).toBe('happy')
       expect(looksLikeTaskSuccessCopy(buildAgentBubbleHead(done))).toBe(true)
     }
+  })
+
+  it('Cursor 的 done 用中性文案，但保留提醒音与 happy 姿态', () => {
+    const done = ev('cursor', 'done', { reason: 'completed' })
+    expect(isCodexLegacyProtocolComplete(done)).toBe(false)
+    expect(shouldPresentAgentTerminalToUser(done)).toBe(true)
+    expect(shouldPlayAgentCompletionSound([done])).toBe(true)
+    expect(petStateForTerminalEvent(done)).toBe('happy')
+    expect(looksLikeTaskSuccessCopy(buildAgentBubbleHead(done))).toBe(false)
+    expect(buildAgentBubbleHead(done)).toContain('这一轮结束了')
+    expect(buildAgentBubbleHead(done)).not.toContain('任务完成')
+    expect(buildAgentBubbleText(done)).not.toContain('任务完成')
+  })
+
+  it('Cursor 的用户中止显示为“被中断”，并保留原始原因', () => {
+    const interrupted = ev('cursor', 'failed', {
+      reason: 'interrupted',
+      detail: 'User aborted request'
+    })
+    expect(buildAgentBubbleHead(interrupted)).toContain('输出被中断了')
+    expect(buildAgentBubbleText(interrupted)).toContain('User aborted request')
   })
 
   it('混合批次：只有非 Codex 的 done 才算完成音和「完成」条数', () => {

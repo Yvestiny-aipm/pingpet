@@ -82,9 +82,70 @@ describe('回合结束判定', () => {
     expect(e.detail).toBe('用户取消')
   })
 
-  it('末行是 turn_ended/error → failed/error', () => {
+  it('末行是 turn_ended/error + User aborted request → failed/interrupted', () => {
+    const p = project('proj-a')
+    session(p, 'sid-1', [assistantText('改到一半'), turnEnded('error', 'User aborted request')])
+    const e = scanOne()
+    expect(e.kind).toBe('failed')
+    expect(e.reason).toBe('interrupted')
+    expect(e.detail).toBe('User aborted request')
+  })
+
+  it('末行是 turn_ended/error + Canceled → failed/interrupted', () => {
+    const p = project('proj-a')
+    session(p, 'sid-1', [assistantText('改到一半'), turnEnded('error', 'Canceled')])
+    const e = scanOne()
+    expect(e.kind).toBe('failed')
+    expect(e.reason).toBe('interrupted')
+  })
+
+  it('用户中止文案允许大小写与句号差异', () => {
+    const p = project('proj-a')
+    session(p, 'sid-1', [assistantText('改到一半'), turnEnded('error', 'USER ABORTED THE REQUEST.')])
+    const e = scanOne()
+    expect(e.kind).toBe('failed')
+    expect(e.reason).toBe('interrupted')
+  })
+
+  it('末行是 turn_ended/error + 超时 → failed/error', () => {
+    const p = project('proj-a')
+    session(p, 'sid-1', [assistantText('等太久了'), turnEnded('error', '[unavailable] PING timed out')])
+    const e = scanOne()
+    expect(e.kind).toBe('failed')
+    expect(e.reason).toBe('error')
+    expect(e.detail).toBe('[unavailable] PING timed out')
+  })
+
+  it('末行是 turn_ended/error + 网络失败 → failed/error', () => {
+    const p = project('proj-a')
+    session(p, 'sid-1', [assistantText('断网了'), turnEnded('error', 'Connection failed repeatedly')])
+    const e = scanOne()
+    expect(e.kind).toBe('failed')
+    expect(e.reason).toBe('error')
+  })
+
+  it('末行是 turn_ended/error + 额度限制 → failed/error', () => {
+    const p = project('proj-a')
+    session(p, 'sid-1', [
+      assistantText('额度用完了'),
+      turnEnded('error', 'Other Models usage limit reached Switched to grok-4.6')
+    ])
+    const e = scanOne()
+    expect(e.kind).toBe('failed')
+    expect(e.reason).toBe('error')
+  })
+
+  it('末行是 turn_ended/error + 普通工具错误 → failed/error', () => {
     const p = project('proj-a')
     session(p, 'sid-1', [assistantText('出问题了'), turnEnded('error', 'tool crashed')])
+    const e = scanOne()
+    expect(e.kind).toBe('failed')
+    expect(e.reason).toBe('error')
+  })
+
+  it('error 文本里包含 abort 但目前不是用户中止文案时，不误判 interrupted', () => {
+    const p = project('proj-a')
+    session(p, 'sid-1', [assistantText('网络中断'), turnEnded('error', 'Connection aborted')])
     const e = scanOne()
     expect(e.kind).toBe('failed')
     expect(e.reason).toBe('error')

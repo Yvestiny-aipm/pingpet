@@ -106,6 +106,24 @@ function errorDetail(line: Record<string, unknown>): string | undefined {
 }
 
 /**
+ * Cursor 把「用户主动停止」写成 turn_ended/error，而不是 aborted。
+ * 本机真实样本里最常见的是 `User aborted request` / `Canceled`。
+ * 只匹配这几种明确文案，不要用宽泛的 includes('abort')，避免把
+ * `Connection aborted` 这类网络错误误判成用户取消。
+ */
+const CURSOR_USER_ABORT_PATTERNS: readonly RegExp[] = [
+  /^(canceled|cancelled)\.?$/i,
+  /^user aborted (the )?request\.?$/i,
+  /^request (was )?aborted by user\.?$/i
+]
+
+function isCursorUserAbort(error: unknown): boolean {
+  if (typeof error !== 'string') return false
+  const normalized = error.replace(/\s+/g, ' ').trim()
+  return CURSOR_USER_ABORT_PATTERNS.some((pattern) => pattern.test(normalized))
+}
+
+/**
  * 解析单个 Cursor 会话文件。
  *
  * 关键约束：Cursor 的行里没有时间戳字段，只能用文件 mtime 当事件时间。而 monitor 的
@@ -186,7 +204,9 @@ function parseCursorFile(filePath: string, projectDir: string, nowMs: number): A
       kind = 'done'
       reason = 'completed'
     }
-  } else if (status === 'aborted') {
+  } else if (status === 'aborted' || isCursorUserAbort(last.error)) {
+    // Cursor 的用户停止不是 status=aborted，而是 turn_ended/error + 固定文案。
+    // 两种都归到 interrupted，气泡才会说“被中断”而不是“出错”。
     kind = 'failed'
     reason = 'interrupted'
     detail = errorDetail(last)
