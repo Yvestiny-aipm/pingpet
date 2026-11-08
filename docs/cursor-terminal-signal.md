@@ -64,8 +64,27 @@
 - `User aborted the request`
 - `Request aborted by user`
 - `Request was aborted by user`
+- `composer_abort_controller_aborted`（2026-10-26 真机点停止观察到）
+- `user_stopped_generation`（2026-10-26 / 11-08 真机点停止观察到）
 
 允许大小写和末尾句号差异。
+
+### 一次写入的短回合
+
+只回文字、不调工具的回合（包括新对话的第一轮），Cursor 会在结束时把「提问 + 回答 + turn_ended」
+一次写进文件，monitor 第一眼看到的就是终态，会因「没见过 working」当历史吞掉。
+
+补救：本轮提问行里自带 `<timestamp>Monday, Oct 26, 2026, 5:23 AM (UTC-4)</timestamp>`（只到分钟）。
+提问时间与文件最后写入间隔在 `AGENT_EVENT_FRESH_MS + 60s` 内，就在终态前补一条 working：
+
+- id = 会话 + 提问时间 + 提问行哈希，每轮扫描稳定，只处理一次；
+- 老会话被碰了 mtime、提问时间超窗 → 不补；
+- 没有 `<timestamp>` 的老格式 → 不补；
+- 启动 prime 时 working 与终态一起只登记不派发。
+
+已知局限：只回文字且从提问到答完超过约 3 分钟的回合仍会漏报。
+
+2026-11-08 真机复测：新对话短问答弹「这一轮结束了」一次；中途停止弹「输出被中断了 ⛔ / user_stopped_generation」。
 
 ---
 

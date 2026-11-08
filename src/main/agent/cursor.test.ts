@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AgentMonitorEvent } from '@shared/types'
-import { scanCursor } from './cursor'
+import { parseCursorUserTimestamp, scanCursor } from './cursor'
+import { AgentMonitor } from './monitor'
 
 /**
  * Cursor 的两个脆弱点都在这里兜住：
@@ -106,6 +107,18 @@ describe('回合结束判定', () => {
     expect(e.kind).toBe('failed')
     expect(e.reason).toBe('interrupted')
   })
+
+  it.each(['composer_abort_controller_aborted', 'user_stopped_generation'])(
+    '末行是 turn_ended/error + %s（真机点停止）→ failed/interrupted',
+    (error) => {
+      const p = project('proj-a')
+      session(p, 'sid-1', [assistantTool(), turnEnded('error', error)])
+      const e = scanOne()
+      expect(e.kind).toBe('failed')
+      expect(e.reason).toBe('interrupted')
+      expect(e.detail).toBe(error)
+    }
+  )
 
   it('末行是 turn_ended/error + 超时 → failed/error', () => {
     const p = project('proj-a')
@@ -244,5 +257,102 @@ describe('扫描范围', () => {
     const sec = (NOW - 30 * 60_000) / 1000
     utimesSync(path, sec, sec)
     expect(scanCursor(NOW)).toEqual([])
+  })
+})
+
+/**
+ * 短回合（只回文字，含新对话第一轮）：Cursor 在结束时把「提问 + 回答 + turn_ended」一口气写入
+ * （2026-10-26 真机实测），monitor 第一眼看到的就是终态。靠提问行里的 <timestamp> 证明这一轮刚发生。
+ * 这里用真实时钟，因为文件 mtime 是真实写入时间。
+ */
+describe('一口气写入的短回合', () => {
+  const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+  /** 按 Cursor 的格式写提问时间，例如 `Monday, Oct 26, 2026, 5:23 AM (UTC-4)` */
+  function cursorStamp(ms: number, offsetHours = -4): string {
+    const d = new Date(ms + offsetHours * 3_600_000)
+    const h = d.getUTCHours()
+    const mm = String(d.getUTCMinutes()).padStart(2, '0')
+    const sign = offsetHours < 0 ? '-' : '+'
+    return `<timestamp>Monday, ${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}, ${h % 12 || 12}:${mm} ${h < 12 ? 'AM' : 'PM'} (UTC${sign}${Math.abs(offsetHours)})</timestamp>`
+  }
+  const quickTurn = (askedAt: number, ask = '解释一下'): unknown[] => [
+    userLine(`${cursorStamp(askedAt)}\n<user_query>\n${ask}\n</user_query>`),
+    assistantText('讲完了'),
+    turnEnded('success')
+  ]
+
+  function cursorMonitor(dispatched: AgentMonitorEvent[]): AgentMonitor {
+    return new AgentMonitor(
+      {
+        codex: { enabled: false, envs: [] },
+        claude: { enabled: false, envs: [] },
+        cursor: { enabled: true, envs: ['desktop'] },
+        grok: { enabled: false, envs: [] }
+      },
+      { now: () => Date.now(), onEvent: (e) => dispatched.push(e), isCursorRunning: () => undefined }
+    )
+  }
+
+  it('解析 Cursor 提问时间（只到分钟，按时区换算）', () => {
+    expect(parseCursorUserTimestamp('<timestamp>Monday, Oct 26, 2026, 5:23 AM (UTC-4)</timestamp>')).toBe(
+      Date.UTC(2026, 9, 26, 9, 23)
+    )
+    expect(parseCursorUserTimestamp('<timestamp>Saturday, Aug 29, 2026, 12:05 AM (UTC+8)</timestamp>')).toBe(
+      Date.UTC(2026, 7, 28, 16, 5)
+    )
+    expect(parseCursorUserTimestamp('<timestamp>Saturday, Aug 29, 2026, 12:05 PM (UTC-7)</timestamp>')).toBe(
+      Date.UTC(2026, 7, 29, 19, 5)
+    )
+    expect(parseCursorUserTimestamp('解释一下')).toBeUndefined()
+  })
+
+  it('提问时间就在刚才、末行已是终态 → 先补一条 working，再报终态，id 稳定', () => {
+    session(project('proj-a'), 'sid-1', quickTurn(Date.now()))
+    const events = scanCursor(Date.now())
+    expect(events.map((e) => e.kind)).toEqual(['working', 'done'])
+    expect(scanCursor(Date.now())[0].id).toBe(events[0].id)
+  })
+
+  it('同一分钟里的两轮，补的 working id 不同', () => {
+    const p = project('proj-a')
+    const now = Date.now()
+    session(p, 'sid-1', quickTurn(now, '第一问'))
+    const first = scanCursor(Date.now())[0].id
+    session(p, 'sid-1', [...quickTurn(now, '第一问'), ...quickTurn(now, '第二问')])
+    expect(scanCursor(Date.now())[0].id).not.toBe(first)
+  })
+
+  it('提问时间早已超窗（老会话被碰了 mtime）→ 不补 working', () => {
+    session(project('proj-a'), 'sid-1', quickTurn(Date.now() - 10 * 60_000))
+    expect(scanCursor(Date.now()).map((e) => e.kind)).toEqual(['done'])
+  })
+
+  it('没有提问时间的老格式 → 不补 working', () => {
+    session(project('proj-a'), 'sid-1', [userLine('解释一下'), assistantText('讲完了'), turnEnded('success')])
+    expect(scanCursor(Date.now()).map((e) => e.kind)).toEqual(['done'])
+  })
+
+  it('端到端：桌宠开着时一口气写入的回合，要提醒且只提醒一次', () => {
+    const dispatched: AgentMonitorEvent[] = []
+    const p = project('proj-a')
+    session(p, 'sid-1', quickTurn(Date.now() - 60 * 60_000, '很久前的问题'))
+    const monitor = cursorMonitor(dispatched)
+    monitor.start() // 首轮 prime：老的一轮只登记
+    monitor.stop()
+    session(p, 'sid-1', [...quickTurn(Date.now() - 60 * 60_000, '很久前的问题'), ...quickTurn(Date.now())])
+    monitor.scanNow()
+    monitor.scanNow()
+    expect(dispatched.filter((e) => e.kind === 'done')).toHaveLength(1)
+  })
+
+  it('端到端：桌宠启动时已存在的回合，prime 只登记不提醒', () => {
+    const dispatched: AgentMonitorEvent[] = []
+    session(project('proj-a'), 'sid-1', quickTurn(Date.now()))
+    const monitor = cursorMonitor(dispatched)
+    monitor.start()
+    monitor.stop()
+    monitor.scanNow()
+    expect(dispatched.filter((e) => e.kind !== 'working')).toHaveLength(0)
   })
 })

@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import { readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join, relative, sep } from 'node:path'
 import {
+  AGENT_EVENT_FRESH_MS,
   AGENT_FILE_FRESH_MS,
   AGENT_MAX_FILES_PER_SOURCE,
   AGENT_SCAN_MAX_DEPTH,
@@ -107,20 +109,67 @@ function errorDetail(line: Record<string, unknown>): string | undefined {
 
 /**
  * Cursor 把「用户主动停止」写成 turn_ended/error，而不是 aborted。
- * 本机真实样本里最常见的是 `User aborted request` / `Canceled`。
+ * 本机真实样本里最常见的是 `User aborted request` / `Canceled`；
+ * 2026-10-26 真机点「停止」又观察到 `composer_abort_controller_aborted`（2 次）和
+ * `user_stopped_generation`（1 次），均为用户主动停止。
  * 只匹配这几种明确文案，不要用宽泛的 includes('abort')，避免把
  * `Connection aborted` 这类网络错误误判成用户取消。
  */
 const CURSOR_USER_ABORT_PATTERNS: readonly RegExp[] = [
   /^(canceled|cancelled)\.?$/i,
   /^user aborted (the )?request\.?$/i,
-  /^request (was )?aborted by user\.?$/i
+  /^request (was )?aborted by user\.?$/i,
+  /^composer_abort_controller_aborted$/i,
+  /^user_stopped_generation$/i
 ]
 
 function isCursorUserAbort(error: unknown): boolean {
   if (typeof error !== 'string') return false
   const normalized = error.replace(/\s+/g, ' ').trim()
   return CURSOR_USER_ABORT_PATTERNS.some((pattern) => pattern.test(normalized))
+}
+
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+/**
+ * 解析 Cursor 写在 user 行里的提问时间，如 `<timestamp>Monday, Oct 26, 2026, 5:23 AM (UTC-4)</timestamp>`。
+ * 只精确到分钟，返回该分钟起点的 UTC 毫秒；格式不认识就返回 undefined（调用方按「没有证据」处理）。
+ */
+export function parseCursorUserTimestamp(text: string): number | undefined {
+  const m = /<timestamp>[^<]*?([A-Za-z]{3})[a-z]* (\d{1,2}), (\d{4}), (\d{1,2}):(\d{2}) (AM|PM) \(UTC(?:([+-])(\d{1,2})(?::(\d{2}))?)?\)<\/timestamp>/i.exec(text)
+  if (!m) return undefined
+  const month = MONTHS.indexOf(m[1].toLowerCase())
+  const hour12 = Number(m[4])
+  if (month < 0 || hour12 < 1 || hour12 > 12) return undefined
+  const hour = (hour12 % 12) + (m[6].toUpperCase() === 'PM' ? 12 : 0)
+  const offsetMin = m[7] ? (m[7] === '-' ? -1 : 1) * (Number(m[8]) * 60 + Number(m[9] ?? 0)) : 0
+  return Date.UTC(Number(m[3]), month, Number(m[2]), hour, Number(m[5])) - offsetMin * 60_000
+}
+
+/** 本轮提问时间与文件最后写入的最大间隔；超过就不认为是「刚发生的一轮」 */
+const TURN_START_WINDOW_MS = AGENT_EVENT_FRESH_MS + 60_000
+
+function turnStartWorking(
+  lines: Record<string, unknown>[],
+  working: AgentMonitorEvent,
+  mtimeMs: number
+): AgentMonitorEvent[] {
+  let user: Record<string, unknown> | undefined
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].role === 'user') {
+      user = lines[i]
+      break
+    }
+  }
+  if (!user) return []
+  const startMs = parseCursorUserTimestamp(extractText(messageOf(user)))
+  if (startMs === undefined) return []
+  const gap = mtimeMs - startMs
+  if (gap < -60_000 || gap > TURN_START_WINDOW_MS) return []
+  // id 用提问时间 + 提问行内容：同一轮每次扫描都一样，只处理一次；同一分钟里的两轮也不会撞
+  const hash = createHash('sha1').update(JSON.stringify(user)).digest('hex').slice(0, 12)
+  // 时间取 mtime 前 1ms：排在终态前面，且和终态一样新，不会被新鲜度过滤掉
+  return [{ ...working, id: `${working.sessionKey}:turn:${startMs}:${hash}`, timestampMs: mtimeMs - 1 }]
 }
 
 /**
@@ -178,6 +227,13 @@ function parseCursorFile(filePath: string, projectDir: string, nowMs: number): A
 
   if (!endedByStatus && !endedByFinalText) return [working]
 
+  // 短回合（只回文字、不调工具，含新对话第一轮）Cursor 会在结束时把「提问 + 回答 + turn_ended」
+  // 一口气写进去（2026-10-26 实测），monitor 第一眼看到的就是终态，会因「没见过 working」当历史吞掉。
+  // 本轮提问行里自带提问时间：它离文件最后写入很近，就是「这一轮刚发生」的证据，先补一条 working。
+  // 老会话被碰了 mtime 时提问时间早已超窗，不补；启动 prime 时两条一起只登记不派发，也不会补发历史。
+  // 时间只精确到分钟，窗口两头各放宽 1 分钟。
+  const turnStart = turnStartWorking(lines, working, mtimeMs)
+
   // 回合已结束：取最后一段 assistant 文本，既做气泡正文也用于判断停下原因
   let body = ''
   for (const line of lines) {
@@ -217,7 +273,7 @@ function parseCursorFile(filePath: string, projectDir: string, nowMs: number): A
     detail = errorDetail(last)
   }
 
-  return [{ ...base, kind, message: body.slice(0, 200), reason, detail }]
+  return [...turnStart, { ...base, kind, message: body.slice(0, 200), reason, detail }]
 }
 
 /**
