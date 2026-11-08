@@ -18,7 +18,6 @@
     "release:mac": "bash scripts/release-mac.sh"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.110.0",
     "@huggingface/transformers": "^4.2.0",
     "electron-store": "^8.2.0",
     "framer-motion": "12.40.0",

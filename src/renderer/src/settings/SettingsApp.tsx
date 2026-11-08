@@ -6,7 +6,6 @@ import {
   Moon,
   PawPrint,
   Settings2,
-  Sparkles,
   Sun,
   X
 } from 'lucide-react'
@@ -16,7 +15,6 @@ import type {
   AgentEnv,
   AgentEventKind,
   AgentSource,
-  AiTestResult,
   MonitoringEnvsKey,
   PetDefinition,
   Settings,
@@ -25,17 +23,14 @@ import type {
 import { api } from '../api'
 import { removeBackgroundFromDataUrl } from '../removeBackground'
 import AgentPage from './AgentPage'
-import AiPage from './AiPage'
 import BubblePage from './BubblePage'
 import GalleryPage from './GalleryPage'
 import GeneralPage from './GeneralPage'
 import PetPage from './PetPage'
-import type { AiProviderChoice, PageKey, ToastState } from './types'
+import type { PageKey, ToastState } from './types'
 import { Button, Dialog } from './ui'
 import logoUrl from '../assets/logo.png'
 import './settings.css'
-
-const SILICONFLOW_BASE_URL = 'https://api.siliconflow.cn/v1'
 
 interface NavItem {
   key: PageKey
@@ -55,8 +50,7 @@ const NAV_GROUPS: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }
   {
     label: '能力',
     items: [
-      { key: 'agent', label: 'Agent 监控', icon: <Activity size={17} /> },
-      { key: 'ai', label: 'AI 总结', icon: <Sparkles size={17} /> }
+      { key: 'agent', label: 'Agent 监控', icon: <Activity size={17} /> }
     ]
   },
   {
@@ -75,8 +69,6 @@ export default function SettingsApp(): JSX.Element {
   const [page, setPage] = useState<PageKey>('pet')
   const [scaleDraft, setScaleDraft] = useState<number | null>(null)
   const [packBusy, setPackBusy] = useState(false)
-  const [aiTestBusy, setAiTestBusy] = useState(false)
-  const [aiTestResult, setAiTestResult] = useState<AiTestResult | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const theme = snapshot?.settings.theme ?? 'light'
@@ -233,38 +225,6 @@ export default function SettingsApp(): JSX.Element {
       .finally(closeDialog)
   }
 
-  const handleTestAi = (): void => {
-    setAiTestBusy(true)
-    setAiTestResult(null)
-    void api
-      .testAiSummary()
-      .then(setAiTestResult)
-      .catch((reason: unknown) => setAiTestResult({ ok: false, error: String(reason) }))
-      .finally(() => setAiTestBusy(false))
-  }
-
-  const applyAiProvider = (choice: AiProviderChoice): void => {
-    if (!snapshot) return
-    setAiTestResult(null)
-    if (choice === 'anthropic') {
-      patch({ aiProvider: 'anthropic' })
-    } else if (choice === 'siliconflow') {
-      patch({
-        aiProvider: 'openai',
-        aiOpenaiBaseUrl: SILICONFLOW_BASE_URL,
-        aiOpenaiModel: snapshot.settings.aiOpenaiModel || 'deepseek-ai/DeepSeek-V3.1'
-      })
-    } else {
-      patch({
-        aiProvider: 'openai',
-        aiOpenaiBaseUrl:
-          snapshot.settings.aiOpenaiBaseUrl === SILICONFLOW_BASE_URL
-            ? 'https://api.openai.com/v1'
-            : snapshot.settings.aiOpenaiBaseUrl
-      })
-    }
-  }
-
   const toggleVisible = (): void => {
     if (!snapshot) return
     if (snapshot.settings.petVisible) {
@@ -296,12 +256,6 @@ export default function SettingsApp(): JSX.Element {
 
   const { settings, pets, appVersion } = snapshot
   const displayScale = scaleDraft ?? settings.petScale
-  const aiProviderChoice: AiProviderChoice =
-    settings.aiProvider === 'anthropic'
-      ? 'anthropic'
-      : settings.aiOpenaiBaseUrl === SILICONFLOW_BASE_URL
-        ? 'siliconflow'
-        : 'openai'
   const currentPet = pets.find((pet) => pet.id === settings.selectedPetId) ?? pets[0] ?? null
   const agentCount = AGENT_SOURCE_LIST.filter((meta) => settings[meta.enabledKey]).length
 
@@ -334,9 +288,6 @@ export default function SettingsApp(): JSX.Element {
                   <span>{item.label}</span>
                   {item.key === 'agent' && agentCount > 0 && (
                     <span className="pp-nav__count">{agentCount}</span>
-                  )}
-                  {item.key === 'ai' && settings.aiSummaryEnabled && (
-                    <span className="pp-nav__dot" aria-label="已开启" />
                   )}
                 </button>
               ))}
@@ -415,19 +366,6 @@ export default function SettingsApp(): JSX.Element {
               onPatch={patch}
               onToggleEnv={toggleEnv}
               onSimulate={(source: AgentSource, kind: AgentEventKind) => api.agentSimulate(source, kind)}
-            />
-          )}
-
-          {page === 'ai' && (
-            <AiPage
-              settings={settings}
-              providerChoice={aiProviderChoice}
-              testBusy={aiTestBusy}
-              testResult={aiTestResult}
-              onPatch={patch}
-              onProvider={applyAiProvider}
-              onTest={handleTestAi}
-              onClearTest={() => setAiTestResult(null)}
             />
           )}
 

@@ -1,6 +1,4 @@
-export type PageKey = 'pet' | 'gallery' | 'bubble' | 'agent' | 'ai' | 'general'
-
-export type AiProviderChoice = 'anthropic' | 'siliconflow' | 'openai'
+export type PageKey = 'pet' | 'gallery' | 'bubble' | 'agent' | 'general'
 
 export interface ToastState {
   id: number

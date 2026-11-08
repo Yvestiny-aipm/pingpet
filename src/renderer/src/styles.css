@@ -93,7 +93,7 @@ body[data-route='pet'] {
   line-height: 1.55;
   letter-spacing: 0.002em;
   text-align: center;
-  /* Agent 气泡第二行（AI 总结 / 错误详情）要真正换行，而不是被折成空格 */
+  /* Agent 气泡第二行（错误详情等）要真正换行，而不是被折成空格 */
   white-space: pre-line;
   cursor: grab;
   pointer-events: auto;

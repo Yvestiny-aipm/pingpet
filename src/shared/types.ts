@@ -78,25 +78,6 @@ export interface Settings extends AgentMonitoringSettings {
    */
   codexCandidateSoundEnabled: boolean
 
-  // ---- v0.5 AI 总结（BYOK：用户自己的 Key，可选联网功能，默认关） ----
-  /**
-   * 任务停下时用大模型读会话末尾、生成一句人话总结拼进气泡。
-   * 开启 = 会话末尾少量文本会发给用户配置的模型服务；关闭 = 该功能完全不联网。
-   */
-  aiSummaryEnabled: boolean
-  /** 用哪家模型服务生成总结 */
-  aiProvider: AiProvider
-  /** Anthropic (Claude) 的 API Key，只存本机 */
-  aiAnthropicApiKey: string
-  /** Anthropic 模型 ID */
-  aiAnthropicModel: string
-  /** OpenAI 兼容接口的 Base URL（也可填 DeepSeek / Ollama 等兼容服务） */
-  aiOpenaiBaseUrl: string
-  /** OpenAI 兼容接口的 API Key，只存本机 */
-  aiOpenaiApiKey: string
-  /** OpenAI 兼容接口的模型 ID */
-  aiOpenaiModel: string
-
   /** v0.7：客户端主题。浅色白底天蓝强调 / 深色近黑底紫色强调 */
   theme: ThemeMode
 
@@ -110,12 +91,6 @@ export interface Settings extends AgentMonitoringSettings {
 
 /** v0.7：客户端主题 */
 export type ThemeMode = 'light' | 'dark'
-
-/** v0.5：AI 总结的模型服务。openai = 任意 OpenAI 兼容接口（含 DeepSeek/Ollama 等） */
-export type AiProvider = 'anthropic' | 'openai'
-
-/** v0.5：设置台「测试连接」的结果 */
-export type AiTestResult = { ok: true; text: string } | { ok: false; error: string }
 
 /**
  * 宠物状态。
@@ -354,8 +329,6 @@ export const IPC = {
   SetInteractive: 'pet:set-interactive',
   // v0.2：dev 模拟 Agent 事件（走真实事件同一处理链路）
   AgentSimulate: 'pet:agent-simulate',
-  // v0.5：测试 AI 总结配置（用当前设置发一次真实请求，验证 Key/模型可用）
-  TestAiSummary: 'pet:test-ai-summary',
   // v0.3.3：合并后的「导入皮肤」——一个入口同时接受图片 / 皮肤包文件夹
   PickSkin: 'pet:pick-skin',
   // v0.4：在线形象库（PetDex）——拉列表 + 一键安装
@@ -409,8 +382,6 @@ export interface PetApi {
   setInteractive(interactive: boolean): void
   /** v0.2 dev-only：模拟一条 Agent 事件，走和真实事件相同的处理链路 */
   agentSimulate(source: AgentSource, kind: AgentEventKind): void
-  /** v0.5：用当前 AI 设置发一次真实请求验证 Key/模型（设置台「测试」按钮） */
-  testAiSummary(): Promise<AiTestResult>
   /** v0.3.3：合并入口——一个对话框选图片或皮肤包文件夹，按类型自动分流 */
   pickSkin(): Promise<PickSkinResult>
   /** v0.4：拉取在线形象库（PetDex）全量列表；联网、用户主动触发 */

@@ -71,14 +71,6 @@ app.whenReady().then(async () => {
   await clickNav(win, 'Agent 监控')
   await capture(win, '04-agent')
 
-  await clickNav(win, 'AI 总结')
-  await capture(win, '05-ai-off')
-  await win.webContents.executeJavaScript(
-    `document.querySelector('.pp-ai-hero .pp-switch')?.click()`
-  )
-  await wait(450)
-  await capture(win, '06-ai-on')
-
   await clickNav(win, '通用设置')
   await capture(win, '07-general')
 
@@ -99,8 +91,6 @@ app.whenReady().then(async () => {
   await capture(win, '11-dark-bubble')
   await clickNav(win, 'Agent 监控')
   await capture(win, '12-dark-agent')
-  await clickNav(win, 'AI 总结')
-  await capture(win, '13-dark-ai')
   await clickNav(win, '通用设置')
   await capture(win, '14-dark-general')
 
@@ -110,8 +100,8 @@ app.whenReady().then(async () => {
   await wait(600)
   await clickNav(win, '桌宠')
   await capture(win, '15-pet-narrow')
-  await clickNav(win, 'AI 总结')
-  await capture(win, '16-ai-narrow')
+  await clickNav(win, 'Agent 监控')
+  await capture(win, '16-agent-narrow')
 
   app.quit()
 })

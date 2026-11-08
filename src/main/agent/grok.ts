@@ -106,7 +106,7 @@ function parseRoster(filePath: string): RosterRow[] {
 }
 
 /**
- * 从会话里取「Bot 最近说的一段话」，用于气泡正文 / AI 总结 / 文本兜底分类。
+ * 从会话里取「Bot 最近说的一段话」，用于气泡正文 / 文本兜底分类。
  *
  * 注意 Grok Bot 的存法和另外三家都不一样：Bot 回复**你**的内容在 send-message 条目里
  * （message.{type,content}，type 可能是 text / widget / attachment / cursor-agent）；

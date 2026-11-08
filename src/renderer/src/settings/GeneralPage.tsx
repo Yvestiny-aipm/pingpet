@@ -99,9 +99,8 @@ export default function GeneralPage(props: GeneralPageProps): JSX.Element {
       <Callout tone="neutral" icon={<ShieldCheck size={16} />}>
         <strong>隐私边界</strong>
         <span>
-          核心监控纯本地、只读；没有账号，也没有遥测。只有三件事会联网：
-          PetDex 形象库（你主动打开时）、AI 总结（你显式开启时）、更新检查（默认开，可在这里关掉）。
-          API Key 使用 macOS 钥匙串加密，只保存在本机。
+          核心监控纯本地、只读；没有账号，也没有遥测。只有两件事会联网：
+          PetDex 形象库（你主动打开时）、更新检查（默认开，可在这里关掉）。
         </span>
       </Callout>
 

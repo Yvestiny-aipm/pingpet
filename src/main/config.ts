@@ -63,8 +63,7 @@ function effectiveReason(event: AgentMonitorEvent): AgentStopReason {
 }
 
 /**
- * v0.5：气泡首行（来源 + 停止原因短语）。这一行来自显式信号 / 规则分类，可信；
- * AI 总结只替换第二行细节，不改动这行的事实性结论。
+ * 气泡首行（来源 + 停止原因短语）。这一行来自显式信号 / 规则分类，可信。
  */
 export function buildAgentBubbleHead(event: AgentMonitorEvent): string {
   // Codex done 只表示这一轮协议结束，不是任务成功。中性提醒 + 邀请回去看，不庆祝。

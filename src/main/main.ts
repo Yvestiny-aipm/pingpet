@@ -32,7 +32,6 @@ import type {
 } from '@shared/types'
 import { IPC } from '@shared/types'
 import {
-  AGENT_AI_BUBBLE_MS,
   AGENT_TERMINAL_BUBBLE_MS,
   AGENT_TERMINAL_COALESCE_MS,
   AGENT_THINKING_STATE_MS,
@@ -42,7 +41,6 @@ import {
 } from '@shared/defaults'
 import {
   APP_NAME,
-  buildAgentBubbleHead,
   buildAgentBubbleText,
   BUBBLE_DURATION_MS,
   BUBBLE_JITTER,
@@ -88,8 +86,7 @@ import {
   codexShadowDiagnosticPath
 } from './agent/codexShadowLog'
 import { createCursorProcessProbe } from './agent/cursorProcess'
-import { summarizeAgentStop, testAiSummary } from './ai/summarize'
-import { getSettings, migrateSecretsAtRest, patchSettings } from './store'
+import { getSettings, patchSettings, purgeLegacySettings } from './store'
 import { checkForUpdate } from './update'
 import type { UpdateInfo } from './update'
 import { clampToWorkArea, createPetWindow, createSettingsWindow, defaultPetPosition } from './windows'
@@ -359,7 +356,7 @@ function handleAgentEvent(event: AgentMonitorEvent): void {
   // 停下来了：进合并缓冲，短窗口内的多个终态一次性弹（防炸屏）
   pendingTerminals.push(event)
   if (!terminalFlushTimer) {
-    terminalFlushTimer = setTimeout(() => void flushTerminalBubbles(), AGENT_TERMINAL_COALESCE_MS)
+    terminalFlushTimer = setTimeout(flushTerminalBubbles, AGENT_TERMINAL_COALESCE_MS)
   }
   // 诊断信息变了，实时刷新设置页
   broadcastSnapshot()
@@ -369,7 +366,7 @@ function handleAgentEvent(event: AgentMonitorEvent): void {
 let pendingTerminals: AgentMonitorEvent[] = []
 let terminalFlushTimer: ReturnType<typeof setTimeout> | null = null
 
-async function flushTerminalBubbles(): Promise<void> {
+function flushTerminalBubbles(): void {
   terminalFlushTimer = null
   const batch = presentableTerminalEvents(pendingTerminals)
   pendingTerminals = []
@@ -381,12 +378,7 @@ async function flushTerminalBubbles(): Promise<void> {
 
   if (batch.length === 1) {
     const e = batch[0]
-    // v0.5 AI 总结（可选）：读会话末尾生成一句人话细节，拼在规则首行下面。
-    // 关着 / 没配 Key / 失败 / 超时都返回 null → 原样回落纯规则文案，提醒永不缺席。
-    const ai = await summarizeAgentStop(e, getSettings())
-    const text = ai ? `${buildAgentBubbleHead(e)}\n${ai}` : buildAgentBubbleText(e)
-    const durationMs = ai ? AGENT_AI_BUBBLE_MS : AGENT_TERMINAL_BUBBLE_MS
-    sendBubble(text, petStateForTerminalEvent(e), durationMs, sound)
+    sendBubble(buildAgentBubbleText(e), petStateForTerminalEvent(e), AGENT_TERMINAL_BUBBLE_MS, sound)
     return
   }
 
@@ -1020,12 +1012,6 @@ function registerIpc(): void {
       false
     )
   })
-
-  // v0.5：设置台「测试连接」——用当前 AI 设置对样例文本发一次真实请求，验证 Key/模型可用
-  ipcMain.handle(IPC.TestAiSummary, (event) => {
-    requireTrustedSender(event)
-    return testAiSummary(getSettings())
-  })
 }
 
 // ---------- 生命周期 ----------
@@ -1073,9 +1059,8 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     debugLaunch('app ready')
-    // 老版本把 API Key 明文存在 config.json 里，就地加密一次。
-    // 必须放在 ready 之后：safeStorage 在那之前不可用。
-    migrateSecretsAtRest()
+    // 清掉已下线功能留在 config.json 里的旧字段（含 AI 总结的加密 API Key）
+    purgeLegacySettings()
     registerIpc()
 
     // v0.4：冷启动时命令行里可能带 deskpet:// URL（Windows/Linux；macOS 走 open-url）

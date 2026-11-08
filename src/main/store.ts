@@ -12,7 +12,6 @@ import { AGENT_SOURCE_LIST } from '@shared/agents'
 import { sanitizeCodexCandidateSettings } from '@shared/codexCandidateSettings'
 import { AGENT_ENVS } from '@shared/types'
 import type { AgentEnv, BubbleAnchor, PetPosition, Settings } from '@shared/types'
-import { decryptSecret, encryptSecret, isEncryptedAtRest } from './secretStore'
 
 /** 把任意输入过滤成合法的环境集合（去重、只留 terminal/vscode/desktop） */
 function sanitizeEnvs(input: unknown): AgentEnv[] | null {
@@ -29,47 +28,31 @@ function sanitizeEnvs(input: unknown): AgentEnv[] | null {
 
 const store = new Store<Settings>({ defaults: DEFAULT_SETTINGS })
 
-/** 存的是 API Key 的字段。加解密只在落盘这一层发生，进程内一律是明文 */
-const SECRET_KEYS = ['aiAnthropicApiKey', 'aiOpenaiApiKey'] as const
+/**
+ * 已下线功能留在磁盘上的旧字段。store.set 只合并不删除，sanitize 虽然不放行它们，
+ * 但不显式删掉就会一直躺在 config.json 里——AI 总结的 API Key（密文）也在其中。
+ */
+const LEGACY_KEYS = [
+  'aiSummaryEnabled',
+  'aiProvider',
+  'aiAnthropicApiKey',
+  'aiAnthropicModel',
+  'aiOpenaiBaseUrl',
+  'aiOpenaiApiKey',
+  'aiOpenaiModel'
+] as const
 
 export function getSettings(): Settings {
-  const raw = store.store as Partial<Settings>
-  // 先解密再走 sanitize：sanitizeSecret 会掐掉空白并限长，那些规则是针对明文 Key 定的，
-  // 直接套到密文上会把密文截断，读出来就永久坏了
-  const plain: Partial<Settings> = { ...raw }
-  for (const key of SECRET_KEYS) plain[key] = decryptSecret(raw[key])
   // 与默认值合并，并清洗磁盘上可能存在的旧字段/脏数据
-  return { ...DEFAULT_SETTINGS, ...sanitize(plain) }
+  return { ...DEFAULT_SETTINGS, ...sanitize(store.store as Partial<Settings>) }
 }
 
-/** 落盘形态：只把 Key 换成密文，其它字段照原样 */
-function toPersisted(settings: Settings): Settings {
-  const out = { ...settings }
-  for (const key of SECRET_KEYS) out[key] = encryptSecret(settings[key])
-  return out
-}
-
-/**
- * 把老版本留在磁盘上的明文 Key 就地加密一次。
- *
- * 必须在 app ready 之后调用：safeStorage 在那之前不可用，早调只会白跑一趟（而且会把
- * 明文原样写回去）。不加密成功就不改盘，避免在不支持加密的系统上反复重写。
- */
-export function migrateSecretsAtRest(): void {
-  const raw = store.store as Partial<Settings>
-  const needsMigration = SECRET_KEYS.some((key) => {
-    const value = raw[key]
-    return typeof value === 'string' && value !== '' && !isEncryptedAtRest(value)
-  })
-  if (!needsMigration) return
-  const settings = getSettings()
-  const persisted = toPersisted(settings)
-  // 加密没真正生效（系统不支持 / 抛错）时别写盘，否则每次启动都把明文重写一遍
-  const sealedSomething = SECRET_KEYS.some(
-    (key) => settings[key] !== '' && isEncryptedAtRest(persisted[key])
-  )
-  if (!sealedSomething) return
-  store.set(persisted)
+/** 启动时调用一次：把 LEGACY_KEYS 从磁盘上删掉；没有就什么都不写 */
+export function purgeLegacySettings(): void {
+  const raw = store.store as unknown as Record<string, unknown>
+  for (const key of LEGACY_KEYS) {
+    if (key in raw) store.delete(key as keyof Settings)
+  }
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -153,71 +136,19 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
   if (typeof partial.autoRemoveBackground === 'boolean') {
     next.autoRemoveBackground = partial.autoRemoveBackground
   }
-  // v0.5 AI 总结：逐字段白名单（漏一个就会静默丢盘，别偷懒）
-  if (typeof partial.aiSummaryEnabled === 'boolean') {
-    next.aiSummaryEnabled = partial.aiSummaryEnabled
-  }
-  if (partial.aiProvider === 'anthropic' || partial.aiProvider === 'openai') {
-    next.aiProvider = partial.aiProvider
-  }
-  if (typeof partial.aiAnthropicApiKey === 'string') {
-    next.aiAnthropicApiKey = sanitizeSecret(partial.aiAnthropicApiKey)
-  }
-  if (typeof partial.aiAnthropicModel === 'string') {
-    next.aiAnthropicModel = sanitizeModelId(partial.aiAnthropicModel)
-  }
-  if (typeof partial.aiOpenaiApiKey === 'string') {
-    next.aiOpenaiApiKey = sanitizeSecret(partial.aiOpenaiApiKey)
-  }
-  if (typeof partial.aiOpenaiModel === 'string') {
-    next.aiOpenaiModel = sanitizeModelId(partial.aiOpenaiModel)
-  }
   if (partial.theme === 'light' || partial.theme === 'dark') {
     next.theme = partial.theme
   }
   if (typeof partial.updateCheckEnabled === 'boolean') {
     next.updateCheckEnabled = partial.updateCheckEnabled
   }
-  if (typeof partial.aiOpenaiBaseUrl === 'string') {
-    const url = sanitizeAiBaseUrl(partial.aiOpenaiBaseUrl)
-    if (url !== null) next.aiOpenaiBaseUrl = url
-  }
   return next
-}
-
-/** API Key：去掉所有空白（换行/空格都是粘贴事故），长度封顶 */
-function sanitizeSecret(value: string): string {
-  return value.replace(/\s+/g, '').slice(0, 500)
-}
-
-/** 模型 ID：留字母数字与常见分隔符，长度封顶 */
-function sanitizeModelId(value: string): string {
-  return value.trim().replace(/[^\w.\-:/]/g, '').slice(0, 120)
-}
-
-/**
- * OpenAI 兼容 Base URL：https 任意主机；http 只放行本机（Ollama/LM Studio 等本地服务），
- * 避免用户把 Key 明文发到远端 http。空串合法（回落默认值由 UI 提示）。
- */
-function sanitizeAiBaseUrl(value: string): string | null {
-  const v = value.trim().replace(/\/+$/, '').slice(0, 300)
-  if (v === '') return ''
-  try {
-    const u = new URL(v)
-    if (u.protocol === 'https:') return v
-    if (u.protocol === 'http:' && (u.hostname === '127.0.0.1' || u.hostname === 'localhost')) {
-      return v
-    }
-  } catch {
-    /* 非法 URL 不落盘 */
-  }
-  return null
 }
 
 export function patchSettings(partial: Partial<Settings>): Settings {
   const next = { ...getSettings(), ...sanitize(partial) }
-  store.set(toPersisted(next))
-  return next // 返回明文：调用方（AI 总结、设置界面）要的是能直接用的 Key
+  store.set(next)
+  return next
 }
 
 export function getStorePath(): string {

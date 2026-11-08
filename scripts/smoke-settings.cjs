@@ -76,19 +76,6 @@ async function run(win) {
   if (!(await js(`Boolean(document.querySelector('.pp-advanced'))`))) problems.push('高级面板没有展开')
   if (!(await js(`document.querySelectorAll('.pp-dev-tools .pp-btn').length === 16`))) problems.push('开发模拟按钮数量异常')
 
-  // AI：开启 → 切 OpenAI 兼容 → 测试连接
-  await clickNav('AI 总结')
-  await js(`document.querySelector('.pp-ai-hero .pp-switch')?.click()`)
-  await wait(350)
-  await js(`[...document.querySelectorAll('.pp-segmented__item')].find((b) => b.textContent.includes('OpenAI 兼容'))?.click()`)
-  await wait(350)
-  if (!(await js(`Boolean(document.querySelector('.pp-input[placeholder="https://api.openai.com/v1"]'))`))) {
-    problems.push('OpenAI 兼容的 Base URL 没有出现')
-  }
-  await js(`[...document.querySelectorAll('.pp-btn')].find((b) => b.textContent.includes('测试连接'))?.click()`)
-  await wait(500)
-  if (!(await js(`Boolean(document.querySelector('.pp-test-result.is-ok'))`))) problems.push('测试连接结果没有显示')
-
   // 主题切换：深色紫色强调 / 浅色天蓝强调
   await js(`[...document.querySelectorAll('.pp-theme-toggle button')].find((b) => b.textContent.includes('深色'))?.click()`)
   await wait(400)
