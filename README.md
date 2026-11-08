@@ -89,7 +89,7 @@ PingPet 兼容 [PetDex](https://petdex.dev)（开放的社区桌宠形象库，`
 - **系统要求**：macOS（Apple Silicon / arm64）
 - **下载**：[PingPet-macOS-arm64.dmg](https://github.com/Yvestiny-aipm/pingpet/releases/latest/download/PingPet-macOS-arm64.dmg)（Releases 里永远指向最新版）
 - **首次打开**：安装包目前是本地 ad-hoc 签名、未做 Apple 公证，Gatekeeper 可能拦一下——对着 App **右键 →「打开」**，或到「系统设置 → 隐私与安全性」里放行即可
-- **更新**：开着「检查新版本」的话，有新版会弹个气泡提醒，并在菜单栏图标里留一个下载入口。暂时还不能一键静默更新——那需要 Apple Developer ID 证书签名后 Squirrel 才肯装
+- **更新**：PingPet 不会自己联网检查更新。想用新版就到 [官网](https://yvestiny-aipm.github.io/pingpet/) 或 [Releases](https://github.com/Yvestiny-aipm/pingpet/releases) 重新下载，覆盖安装即可，设置和导入的形象都会保留
 
 ## 开发
 
@@ -103,8 +103,7 @@ pnpm release:mac # 发版：跑测试 → 打包 → 打 tag → 建 GitHub rele
 ```
 
 发版只改 `package.json` 的 `version`，git tag 和 release 的 tag 都由脚本从它派生。
-三者一旦不一致，「检查新版本」会静默失灵（tag 比 App 内版本号新 → 装了最新版的用户
-被无限提醒；反过来 → 真发了新版也没人收到），所以不要手敲 tag。
+三者一旦不一致，Releases 页面上的版本和 App 里「关于」显示的版本就对不上，所以不要手敲 tag。
 
 **技术栈**：Electron 33 · electron-vite 3 · React 18 · TypeScript · electron-store · electron-builder · pnpm
 
