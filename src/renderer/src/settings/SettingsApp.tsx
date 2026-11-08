@@ -372,7 +372,6 @@ export default function SettingsApp(): JSX.Element {
           {page === 'general' && (
             <GeneralPage
               snapshot={snapshot}
-              onPatch={patch}
               onResetPosition={resetPosition}
               onToggleVisible={toggleVisible}
               onReveal={() => void api.revealPetPacksFolder()}

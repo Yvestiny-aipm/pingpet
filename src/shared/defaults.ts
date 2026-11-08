@@ -34,21 +34,8 @@ export const DEFAULT_SETTINGS: Settings = {
   codexCandidateBubbleEnabled: false,
   codexCandidateSoundEnabled: false,
   // v0.7：默认浅色。深色是用户显式选择，不跟随系统，避免桌面宠物黑白跳变。
-  theme: 'light',
-  // v0.6.2：默认开。它和「默认不联网」的原则不冲突——只取一个版本号，不上传任何用户数据；
-  // 关掉更新检查的代价是用户永远停在装机那版，收不到修复。
-  updateCheckEnabled: true
+  theme: 'light'
 }
-
-// ---------- v0.6.2 新版本提醒常量 ----------
-
-/** 启动后延迟这么久再查更新：别和冷启动抢资源，也别让用户开机就被弹窗打扰 */
-export const UPDATE_CHECK_STARTUP_DELAY_MS = 20_000
-/** 之后每隔这么久查一次（常驻应用可能好几天不重启） */
-export const UPDATE_CHECK_INTERVAL_MS = 24 * 3600_000
-/** 发现新版本时气泡展示时长：比普通气泡长一些，用户要有时间点它 */
-export const UPDATE_BUBBLE_MS = 12_000
-
 
 // ---------- v0.2 Agent 监控常量 ----------
 

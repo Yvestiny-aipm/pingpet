@@ -27,7 +27,6 @@ const settings = {
   codexCandidateVisualEnabled: false,
   codexCandidateBubbleEnabled: false,
   codexCandidateSoundEnabled: false,
-  updateCheckEnabled: true,
   codexMonitoringEnabled: true,
   codexMonitoringEnvs: ['terminal', 'vscode', 'desktop'],
   claudeMonitoringEnabled: true,

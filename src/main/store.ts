@@ -39,7 +39,8 @@ const LEGACY_KEYS = [
   'aiAnthropicModel',
   'aiOpenaiBaseUrl',
   'aiOpenaiApiKey',
-  'aiOpenaiModel'
+  'aiOpenaiModel',
+  'updateCheckEnabled'
 ] as const
 
 export function getSettings(): Settings {
@@ -138,9 +139,6 @@ function sanitize(partial: Partial<Settings>): Partial<Settings> {
   }
   if (partial.theme === 'light' || partial.theme === 'dark') {
     next.theme = partial.theme
-  }
-  if (typeof partial.updateCheckEnabled === 'boolean') {
-    next.updateCheckEnabled = partial.updateCheckEnabled
   }
   return next
 }

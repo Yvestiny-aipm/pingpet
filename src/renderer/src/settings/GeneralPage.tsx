@@ -5,17 +5,15 @@ import {
   EyeOff,
   FolderOpen,
   Power,
-  RefreshCw,
   RotateCcw,
   ShieldCheck
 } from 'lucide-react'
-import type { Settings, Snapshot } from '@shared/types'
+import type { Snapshot } from '@shared/types'
 import { Badge, Button, Callout, Card, PageHead, Row, SectionHead, Switch } from './ui'
 import logoUrl from '../assets/logo.png'
 
 export interface GeneralPageProps {
   snapshot: Snapshot
-  onPatch: (partial: Partial<Settings>) => void
   onResetPosition: () => void
   onToggleVisible: () => void
   onReveal: () => void
@@ -23,7 +21,7 @@ export interface GeneralPageProps {
 }
 
 export default function GeneralPage(props: GeneralPageProps): JSX.Element {
-  const { snapshot, onPatch } = props
+  const { snapshot } = props
   const { settings, appVersion } = snapshot
 
   return (
@@ -73,23 +71,11 @@ export default function GeneralPage(props: GeneralPageProps): JSX.Element {
       </section>
 
       <section className="pp-section">
-        <SectionHead title="更新" hint="有新版本时弹一次气泡，并在菜单栏留一个下载入口。" />
+        <SectionHead title="版本" hint="PingPet 不会自己联网检查更新，新版本请到官网或 GitHub Releases 下载。" />
         <Card padded={false} className="pp-settings-card">
           <Row
-            title="检查新版本"
-            desc="每天检查一次。只向 GitHub 取一个版本号，不上传任何关于你的信息。"
-            icon={<RefreshCw size={15} />}
-            control={
-              <Switch
-                label="检查新版本"
-                checked={settings.updateCheckEnabled}
-                onChange={(value) => onPatch({ updateCheckEnabled: value })}
-              />
-            }
-          />
-          <Row
             title="当前版本"
-            desc="暂不支持一键静默更新——需要 Apple Developer ID 签名和公证。发现新版本会打开下载页。"
+            desc="yvestiny-aipm.github.io/pingpet"
             icon={<Download size={15} />}
             control={<span className="pp-version">v{appVersion}</span>}
           />
@@ -99,8 +85,7 @@ export default function GeneralPage(props: GeneralPageProps): JSX.Element {
       <Callout tone="neutral" icon={<ShieldCheck size={16} />}>
         <strong>隐私边界</strong>
         <span>
-          核心监控纯本地、只读；没有账号，也没有遥测。只有两件事会联网：
-          PetDex 形象库（你主动打开时）、更新检查（默认开，可在这里关掉）。
+          核心监控纯本地、只读；没有账号，也没有遥测。唯一会联网的是 PetDex 形象库，而且只在你主动打开它时。
         </span>
       </Callout>
 
